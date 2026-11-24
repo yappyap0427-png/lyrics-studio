@@ -4,9 +4,15 @@
 
 A synced-lyrics player for Spotify and YouTube with three visual styles and built-in video recording. Single HTML file, no install.
 
+**線上版 / Live：** <https://yappyap0427-png.github.io/lyrics-studio/>
+
 ![Lyrics Studio：流光 16:9、流光 9:16、電影 9:16](docs/preview.png)
 
 ## 怎麼開
+
+**最簡單：直接打開 <https://yappyap0427-png.github.io/lyrics-studio/>**。不用安裝任何東西，建議用 Chrome 或 Edge。
+
+**想在自己電腦上跑：**
 
 1. 在這個頁面按綠色的 **Code → Download ZIP**，下載後解壓縮（或用 `git clone`）。`index.html`、`serve.py`、`start.bat` 要放在同一個資料夾。
 2. 點兩下 `start.bat`。會出現一個黑色視窗（用的時候不要關），瀏覽器會自動打開 `http://127.0.0.1:8888/`。
@@ -32,7 +38,7 @@ A synced-lyrics player for Spotify and YouTube with three visual styles and buil
 Spotify 從 2026 年 2 月起規定：開發模式的 App 擁有者必須有 Premium。設定一次就好：
 
 1. 到 <https://developer.spotify.com/dashboard> 登入，按 **Create app**，名稱和說明隨便填。
-2. **Redirect URI** 填 `http://127.0.0.1:8888/`（程式的設定視窗也會顯示，可以直接複製）。Spotify 不接受 `localhost`。
+2. **Redirect URI** 填你開啟程式的網址：用線上版填 `https://yappyap0427-png.github.io/lyrics-studio/`，在自己電腦上跑填 `http://127.0.0.1:8888/`，兩個都加也可以。程式的 Spotify 設定視窗會顯示目前該填哪一個，可以直接複製。Spotify 不接受 `localhost`。
 3. 勾選 **Web API**，儲存。到 Settings 複製 **Client ID**。
 4. 回到程式點 Spotify，貼上 Client ID，按「連接 Spotify」並同意授權。
 

@@ -760,7 +760,7 @@ class SpotifySource {
   constructor(app) { this.app = app; this.active = false; this.timer = 0; this.loop = 0; this.warned403 = false; }
   get clientId() { return Store.get('spotify.clientId', ''); }
   get token() { return Store.get('spotify.token', null); }
-  redirectUri() { return location.origin + location.pathname; }
+  redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
   originProblem() {
     if (location.protocol === 'file:') return 'file';
     if (location.hostname === 'localhost') return 'localhost';
