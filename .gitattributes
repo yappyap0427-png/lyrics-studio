@@ -1,0 +1,3 @@
+* text=auto
+# keep Windows line endings byte-for-byte so cmd.exe runs it correctly
+*.bat -text

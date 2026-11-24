@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyrics Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..800&family=Noto+Sans+SC:wght@400..900&family=Noto+Sans+TC:wght@400..900&family=Noto+Serif+TC:wght@500..900&family=Outfit:wght@400..800&display=swap">
+<style>
+/*CSS*/
+</style>
+</head>
+<body>
+<canvas id="stage" width="1920" height="1080" aria-label="歌詞畫面"></canvas>
+
+<div class="ui" id="ui">
+  <header class="topbar">
+    <div class="seg glass" role="tablist" aria-label="音樂來源">
+      <button type="button" role="tab" data-src="spotify">Spotify</button>
+      <button type="button" role="tab" data-src="youtube">YouTube</button>
+      <button type="button" role="tab" data-src="demo">示範</button>
+    </div>
+    <div class="status glass" id="status" aria-live="polite"></div>
+  </header>
+
+  <nav class="dock glass" aria-label="控制列">
+    <button type="button" class="ib" id="btnSearch" data-tip="搜尋歌詞（L）" aria-label="搜尋歌詞">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+    </button>
+    <div class="offset" data-tip="歌詞太早或太晚時調整（[ ]）">
+      <button type="button" class="ib sm" id="offMinus" aria-label="歌詞提早 0.1 秒">−</button>
+      <output id="offVal" aria-label="歌詞偏移">0.0s</output>
+      <button type="button" class="ib sm" id="offPlus" aria-label="歌詞延後 0.1 秒">+</button>
+    </div>
+    <span class="sep"></span>
+    <button type="button" class="ib txt" id="btnTheme" data-tip="切換風格（T）">流光</button>
+    <button type="button" class="ib txt" id="btnLayout" data-tip="切換畫面比例（V）">填滿</button>
+    <button type="button" class="ib" id="btnSettings" data-tip="設定" aria-label="設定">
+      <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+    </button>
+    <button type="button" class="ib" id="btnFull" data-tip="全螢幕（F）" aria-label="全螢幕">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button type="button" class="rec-btn" id="btnRec" data-tip="錄影（R）"><span class="dot"></span><span class="lbl">錄影</span></button>
+  </nav>
+</div>
+
+<div class="recbar" id="recbar" hidden><span class="dot"></span><span id="recTime">0:00</span><button type="button" id="recStop">停止錄影</button></div>
+<div class="ytcard" id="ytcard" hidden><div class="ythead">YouTube 播放器（可拖曳）</div><div id="ytplayer"></div></div>
+<div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+<div class="drop" aria-hidden="true">放開來匯入 LRC 歌詞</div>
+
+<dialog class="sheet" id="dlgSpotify" aria-labelledby="spTitle">
+  <div class="sheet-in">
+    <h2 id="spTitle">連接 Spotify</h2>
+    <p class="lead">讀取你正在播放的歌和進度，任何裝置上播都可以。Spotify 規定開發模式的 App 擁有者要有 Premium。</p>
+    <div class="warn" id="spWarn" hidden></div>
+    <ol class="steps">
+      <li>打開 <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify 開發者後台</a>，按 Create app，名稱和說明隨便填。</li>
+      <li>Redirect URI 填這個，一個字都不能差：
+        <span class="copy"><code id="spRedirect"></code><button type="button" class="mini" id="spCopy">複製</button></span></li>
+      <li>API 勾選 Web API，儲存後到 Settings 複製 Client ID。</li>
+    </ol>
+    <label class="field"><span>Client ID</span><input id="spClient" autofocus autocomplete="off" spellcheck="false" placeholder="貼上 32 個字元的 Client ID"></label>
+    <div class="row between">
+      <div class="left"><button type="button" class="ghost" id="spLogout" hidden>中斷連線</button></div>
+      <div class="left"><button type="button" class="ghost" data-close>取消</button><button type="button" class="primary" id="spConnect">連接 Spotify</button></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="dlgYoutube" aria-labelledby="ytTitle">
+  <form class="sheet-in" id="ytForm">
+    <h2 id="ytTitle">播放 YouTube 的歌</h2>
+    <p class="lead">YouTube Music 沒有開放讀取播放進度，所以歌會在這個程式裡播放，歌詞跟著它同步。不需要登入。</p>
+    <label class="field"><span>歌曲連結</span><input id="ytUrl" autofocus autocomplete="off" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…"></label>
+    <p class="hint">用 YouTube Music 的歌曲連結最準。MV 常有前奏或劇情片段，歌詞可能要用偏移調整。</p>
+    <div class="row end"><button type="button" class="ghost" data-close>取消</button><button type="submit" class="primary">播放</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet wide" id="dlgSearch" aria-labelledby="sTitle">
+  <form class="sheet-in" id="searchForm">
+    <h2 id="sTitle">搜尋歌詞</h2>
+    <div class="searchbar"><input id="q" autofocus autocomplete="off" spellcheck="false" placeholder="歌名，或歌名加歌手"><button type="submit" class="primary">搜尋</button></div>
+    <ul class="results" id="results"></ul>
+    <div class="row between">
+      <div class="left"><button type="button" class="ghost" id="btnImport">匯入 LRC 檔</button><button type="button" class="ghost" id="btnAuto">改回自動配對</button></div>
+      <button type="button" class="ghost" id="searchClose">關閉</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="dlgRec" aria-labelledby="rTitle">
+  <form class="sheet-in" id="recForm">
+    <h2 id="rTitle">錄影</h2>
+    <p class="lead">錄下來的是歌詞畫面本身，按鈕和視窗不會入鏡。這次輸出 <strong id="recSize">1920 × 1080</strong>。</p>
+    <fieldset class="choices">
+      <legend>聲音</legend>
+      <label><input type="radio" name="aud" value="none"> 不錄聲音</label>
+      <label><input type="radio" name="aud" value="system"> 電腦正在播的聲音</label>
+      <label><input type="radio" name="aud" value="mic"> 麥克風（邊唱邊錄）</label>
+      <label><input type="radio" name="aud" value="both"> 電腦聲音加麥克風</label>
+    </fieldset>
+    <p class="hint" id="recHint"></p>
+    <div class="grid2">
+      <label class="field"><span>流暢度</span><select id="recFps"><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
+      <label class="field"><span>畫質</span><select id="recQ"><option value="std">標準（8 Mbps）</option><option value="high">高（16 Mbps）</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="recAuto"> 換歌或播完時自動停止</label>
+    <div class="row end"><button type="button" class="ghost" id="recCancel">取消</button><button type="submit" class="primary">開始錄影</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="dlgSettings" aria-labelledby="setTitle">
+  <div class="sheet-in">
+    <h2 id="setTitle">設定</h2>
+    <label class="check"><input type="checkbox" id="setKaraoke"> 唱到哪裡亮到哪裡（卡拉OK 填色）</label>
+    <label class="check"><input type="checkbox" id="setBlur"> 遠處的歌詞模糊</label>
+    <label class="check"><input type="checkbox" id="setInfo"> 顯示封面和歌名</label>
+    <div class="grid2">
+      <label class="field"><span>對齊</span><select id="setAlign"><option value="auto">自動</option><option value="left">靠左</option><option value="center">置中</option></select></label>
+      <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05"></label>
+    </div>
+    <div class="keys">
+      <h3>快捷鍵</h3>
+      <dl>
+        <dt><kbd>空白</kbd></dt><dd>播放或暫停（YouTube、示範）</dd>
+        <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>倒退或快轉 5 秒（YouTube、示範）</dd>
+        <dt><kbd>[</kbd><kbd>]</kbd></dt><dd>歌詞提早或延後 0.1 秒，按住 Shift 一次 0.5 秒</dd>
+        <dt><kbd>L</kbd></dt><dd>搜尋歌詞</dd>
+        <dt><kbd>T</kbd></dt><dd>切換風格：流光、明體、電影</dd>
+        <dt><kbd>V</kbd></dt><dd>切換比例：填滿、16:9、9:16、1:1</dd>
+        <dt><kbd>R</kbd></dt><dd>開始或停止錄影</dd>
+        <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
+        <dt><kbd>H</kbd></dt><dd>隱藏或顯示介面</dd>
+      </dl>
+    </div>
+    <div class="row between"><button type="button" class="ghost" id="setOffReset">偏移歸零</button><button type="button" class="primary" data-close>完成</button></div>
+  </div>
+</dialog>
+
+<input type="file" id="lrcFile" accept=".lrc,.txt,text/plain" hidden>
+<script>
+/*JS*/
+</script>
+</body>
+</html>
