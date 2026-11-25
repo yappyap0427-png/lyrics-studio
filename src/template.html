@@ -12,21 +12,38 @@
 </style>
 </head>
 <body>
-<canvas id="stage" width="1920" height="1080" aria-label="歌詞畫面"></canvas>
+<canvas id="stage" width="1920" height="1080" role="img" aria-label="歌詞畫面"></canvas>
+<p class="sr-only" id="srLyric" aria-live="polite" aria-atomic="true"></p>
+
+<div class="envbar" id="envBar" role="alert" hidden>
+  <span id="envMsg"></span>
+  <a id="envLink" href="#">開啟線上版</a>
+  <button type="button" id="envClose" aria-label="關閉提示">×</button>
+</div>
 
 <div class="ui" id="ui">
   <header class="topbar">
-    <div class="seg glass" role="tablist" aria-label="音樂來源">
-      <button type="button" role="tab" data-src="spotify">Spotify</button>
-      <button type="button" role="tab" data-src="youtube">YouTube</button>
-      <button type="button" role="tab" data-src="demo">示範</button>
+    <div class="seg glass" role="group" aria-label="音樂來源">
+      <button type="button" data-src="spotify" aria-pressed="false">Spotify</button>
+      <button type="button" data-src="youtube" aria-pressed="false">YouTube</button>
+      <button type="button" data-src="demo" aria-pressed="false">示範</button>
     </div>
     <div class="status glass" id="status" aria-live="polite"></div>
   </header>
 
+  <div class="scrub glass" id="scrub" hidden>
+    <span class="t" id="tCur">0:00</span>
+    <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="播放進度">
+    <span class="t" id="tDur">0:00</span>
+    <label class="vol" id="volWrap" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <input type="range" id="vol" min="0" max="100" step="1" value="100" aria-label="音量">
+    </label>
+  </div>
+
   <nav class="dock glass" aria-label="控制列">
     <button type="button" class="ib" id="btnSearch" data-tip="搜尋歌詞（L）" aria-label="搜尋歌詞">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
     </button>
     <div class="offset" data-tip="歌詞太早或太晚時調整（[ ]）">
       <button type="button" class="ib sm" id="offMinus" aria-label="歌詞提早 0.1 秒">−</button>
@@ -34,28 +51,37 @@
       <button type="button" class="ib sm" id="offPlus" aria-label="歌詞延後 0.1 秒">+</button>
     </div>
     <span class="sep"></span>
-    <button type="button" class="ib txt" id="btnTheme" data-tip="切換風格（T）">流光</button>
-    <button type="button" class="ib txt" id="btnLayout" data-tip="切換畫面比例（V）">填滿</button>
+    <button type="button" class="ib txt" id="btnTheme" data-tip="風格（T）" aria-haspopup="menu" aria-expanded="false">流光</button>
+    <button type="button" class="ib txt" id="btnLayout" data-tip="畫面比例（V）" aria-haspopup="menu" aria-expanded="false">填滿</button>
     <button type="button" class="ib" id="btnSettings" data-tip="設定" aria-label="設定">
-      <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
     </button>
     <button type="button" class="ib" id="btnFull" data-tip="全螢幕（F）" aria-label="全螢幕">
-      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
     </button>
     <span class="sep"></span>
     <button type="button" class="rec-btn" id="btnRec" data-tip="錄影（R）"><span class="dot"></span><span class="lbl">錄影</span></button>
   </nav>
 </div>
 
-<div class="recbar" id="recbar" hidden><span class="dot"></span><span id="recTime">0:00</span><button type="button" id="recStop">停止錄影</button></div>
+<div class="recbar" id="recbar" hidden>
+  <span class="dot"></span><span id="recTime">0:00</span><span class="bytes" id="recBytes">0.0 MB</span>
+  <button type="button" class="soft" id="recPause">暫停</button>
+  <button type="button" id="recStop">停止錄影</button>
+</div>
+<div class="countdown" id="countdown" hidden>
+  <div class="cd-num" id="cdNum" aria-live="assertive">3</div>
+  <p>準備開始錄影</p>
+  <button type="button" id="cdCancel">取消</button>
+</div>
 <div class="ytcard" id="ytcard" hidden><div class="ythead">YouTube 播放器（可拖曳）</div><div id="ytplayer"></div></div>
-<div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+<div class="toast glass" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="x" aria-label="關閉訊息">×</button></div>
 <div class="drop" aria-hidden="true">放開來匯入 LRC 歌詞</div>
 
 <dialog class="sheet" id="dlgSpotify" aria-labelledby="spTitle">
   <div class="sheet-in">
     <h2 id="spTitle">連接 Spotify</h2>
-    <p class="lead">讀取你正在播放的歌和進度，任何裝置上播都可以。Spotify 規定開發模式的 App 擁有者要有 Premium。</p>
+    <p class="lead">讀取你正在播放的歌和進度，任何裝置上播都可以。Spotify 規定開發模式的 App 擁有者要有 Premium。這個程式只要求「讀取正在播放」的權限，不能控制你的播放。</p>
     <div class="warn" id="spWarn" hidden></div>
     <ol class="steps">
       <li>打開 <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify 開發者後台</a>，按 Create app，名稱和說明隨便填。</li>
@@ -85,9 +111,19 @@
   <form class="sheet-in" id="searchForm">
     <h2 id="sTitle">搜尋歌詞</h2>
     <div class="searchbar"><input id="q" autofocus autocomplete="off" spellcheck="false" placeholder="歌名，或歌名加歌手"><button type="submit" class="primary">搜尋</button></div>
-    <ul class="results" id="results"></ul>
+    <div id="searchList">
+      <ul class="results" id="results"></ul>
+    </div>
+    <div class="preview" id="preview" hidden>
+      <div class="pv-head">
+        <div><h3 id="pvTitle"></h3><p id="pvMeta"></p></div>
+        <span class="badge on" id="pvKind"></span>
+      </div>
+      <ol class="pv-lines" id="pvLines"></ol>
+      <div class="row end"><button type="button" class="ghost" id="pvBack">返回結果</button><button type="button" class="primary" id="pvApply">套用這份歌詞</button></div>
+    </div>
     <div class="row between">
-      <div class="left"><button type="button" class="ghost" id="btnImport">匯入 LRC 檔</button><button type="button" class="ghost" id="btnAuto">改回自動配對</button></div>
+      <div class="left"><button type="button" class="ghost" id="btnImport">匯入 LRC 檔</button><button type="button" class="ghost" id="btnAuto">改回自動配對</button><button type="button" class="ghost" id="btnNone">這首不顯示歌詞</button></div>
       <button type="button" class="ghost" id="searchClose">關閉</button>
     </div>
   </form>
@@ -105,10 +141,12 @@
       <label><input type="radio" name="aud" value="both"> 電腦聲音加麥克風</label>
     </fieldset>
     <p class="hint" id="recHint"></p>
-    <div class="grid2">
+    <div class="grid3">
       <label class="field"><span>流暢度</span><select id="recFps"><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
       <label class="field"><span>畫質</span><select id="recQ"><option value="std">標準（8 Mbps）</option><option value="high">高（16 Mbps）</option></select></label>
+      <label class="field"><span>檔案格式</span><select id="recFmt"><option value="auto">自動（優先 MP4）</option><option value="webm">WebM</option></select></label>
     </div>
+    <label class="check"><input type="checkbox" id="recCd"> 開始前倒數 3 秒</label>
     <label class="check"><input type="checkbox" id="recAuto"> 換歌或播完時自動停止</label>
     <div class="row end"><button type="button" class="ghost" id="recCancel">取消</button><button type="submit" class="primary">開始錄影</button></div>
   </form>
@@ -120,9 +158,10 @@
     <label class="check"><input type="checkbox" id="setKaraoke"> 唱到哪裡亮到哪裡（卡拉OK 填色）</label>
     <label class="check"><input type="checkbox" id="setBlur"> 遠處的歌詞模糊</label>
     <label class="check"><input type="checkbox" id="setInfo"> 顯示封面和歌名</label>
+    <label class="check"><input type="checkbox" id="setCredit"> 電影風格：開頭顯示歌名</label>
     <div class="grid2">
       <label class="field"><span>對齊</span><select id="setAlign"><option value="auto">自動</option><option value="left">靠左</option><option value="center">置中</option></select></label>
-      <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05"></label>
+      <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05" value="1"></label>
     </div>
     <div class="keys">
       <h3>快捷鍵</h3>
@@ -134,9 +173,11 @@
         <dt><kbd>T</kbd></dt><dd>切換風格：流光、明體、電影</dd>
         <dt><kbd>V</kbd></dt><dd>切換比例：填滿、16:9、9:16、1:1</dd>
         <dt><kbd>R</kbd></dt><dd>開始或停止錄影</dd>
+        <dt><kbd>P</kbd></dt><dd>錄影時暫停或繼續</dd>
         <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
         <dt><kbd>H</kbd></dt><dd>隱藏或顯示介面</dd>
       </dl>
+      <p class="hint">YouTube 和示範模式：點一行歌詞就跳到那裡，在空白處點兩下播放或暫停。</p>
     </div>
     <div class="row between"><button type="button" class="ghost" id="setOffReset">偏移歸零</button><button type="button" class="primary" data-close>完成</button></div>
   </div>

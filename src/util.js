@@ -21,12 +21,51 @@ function hashStr(s) {
   return h >>> 0;
 }
 
-/* localStorage can throw (privacy modes, embedded frames) — never let it break the app */
+/* localStorage can throw (privacy modes, embedded frames, quota) — never let it break the app */
 const Store = {
   get(k, d) { try { const v = localStorage.getItem('ls.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('ls.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+  set(k, v) { try { localStorage.setItem('ls.' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem('ls.' + k); } catch (e) { /* ignore */ } },
 };
+
+/* how the page was opened decides what can work: Spotify wants https or a loopback IP,
+   the YouTube player needs a real web origin, recording needs a secure context */
+const Env = {
+  kind() {
+    if (location.protocol === 'file:') return 'file';
+    const h = location.hostname;
+    if (h === 'localhost' || h.endsWith('.localhost')) return 'localhost';
+    if (location.protocol === 'https:') return 'https';
+    if (h === '127.0.0.1' || h === '[::1]') return 'loopback';
+    return 'http';
+  },
+  can(feature) {
+    const k = this.kind();
+    if (feature === 'spotify') return k === 'https' || k === 'loopback';
+    if (feature === 'youtube') return k !== 'file';
+    if (feature === 'record') return !!window.isSecureContext;
+    return true;
+  },
+};
+
+/* fetch that gives up after `ms` and can also be cancelled by the caller's signal */
+async function fetchT(url, opts = {}, ms = 10000) {
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
+  const outer = opts.signal;
+  const onOuter = () => ctl.abort();
+  if (outer) { if (outer.aborted) ctl.abort(); else outer.addEventListener('abort', onOuter, { once: true }); }
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+  } catch (e) {
+    if (timedOut) throw Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' });
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    if (outer) outer.removeEventListener('abort', onOuter);
+  }
+}
 
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -120,15 +159,37 @@ async function sha256b64url(str) {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/* Chinese .lrc files are often GBK or Big5, not UTF-8: pick the decoding that yields the most common characters */
+const COMMON_HAN = '的一是不了人我在有他這这中大來来上國国個个到說说們们為为子和你地出道也時时年得就那要下以生會会自著着去之過过家學学對对可她裡里後后小麼么心多天而能好都然沒没日於于起還还發发成事只作當当想看文無无開开手十用主行方又如前所本見见經经頭头面公同三已老從从動动兩两長长知民樣样現现分將将外但身些與与高意進进把法此實实回二理美點点月明其種种聲声全工己話话兒儿者向情部正名定女問问力機机給给等幾几很業业最間间新什打便位因重被走電电四第門门相次東东政海口使教西再平真聽听世氣气信北少關关並并內内加化由卻却代軍军產产入先山五太水萬万市眼體体別别處处總总才場场師师書书愛爱夢梦風风雨淚泪笑走路愛夜光';
+function decodeText(buf) {
+  const b = new Uint8Array(buf);
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(b);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { /* not UTF-8 */ }
+  let best = null, bestScore = -Infinity;
+  for (const enc of ['gb18030', 'big5', 'shift_jis', 'euc-kr', 'windows-1252']) {
+    let s;
+    try { s = new TextDecoder(enc).decode(b); } catch (e) { continue; }
+    let score = 0;
+    for (const ch of s) { if (ch === '�') score -= 5; else if (COMMON_HAN.includes(ch)) score += 1; }
+    if (score > bestScore) { best = s; bestScore = score; }
+  }
+  return best != null ? best : new TextDecoder('utf-8').decode(b);
+}
+
+/* toasts: ms = 0 keeps it on screen until closed (for errors the user has to act on) */
 let toastTimer = 0;
 function toast(msg, ms = 3400) {
   const el = $('#toast');
   if (!el) return;
-  el.textContent = msg;
+  const m = el.querySelector('.msg') || el;
+  m.textContent = msg;
   el.classList.add('show');
+  el.classList.toggle('sticky', ms === 0);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+  if (ms > 0) toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
+function hideToast() { const el = $('#toast'); if (el) el.classList.remove('show'); clearTimeout(toastTimer); }
 
 function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);

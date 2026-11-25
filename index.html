@@ -19,7 +19,10 @@
 html, body { margin: 0; height: 100%; background: #000; color: #fff; font-family: var(--ui); overflow: hidden; -webkit-font-smoothing: antialiased; }
 button, input, select { font-family: inherit; }
 [hidden] { display: none !important; }
-#stage { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; background: #000; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+#stage { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; background: #000; touch-action: manipulation; }
+#stage.seekable { cursor: pointer; }
+body.idle #stage { cursor: none; }
 
 /* interface floats above the canvas and is never recorded */
 .ui { position: fixed; inset: 0; pointer-events: none; transition: opacity .6s var(--e); z-index: 2; }
@@ -31,42 +34,86 @@ body.idle { cursor: none; }
 .seg { pointer-events: auto; display: flex; padding: 4px; border-radius: 999px; }
 .seg button { appearance: none; border: 0; background: transparent; color: rgb(255 255 255 / .68); font: 500 14px/1 var(--ui); padding: 10px 16px; border-radius: 999px; cursor: pointer; transition: background .2s, color .2s; }
 .seg button:hover { color: #fff; }
-.seg button[aria-selected="true"] { background: rgb(255 255 255 / .15); color: #fff; }
+.seg button[aria-pressed="true"] { background: rgb(255 255 255 / .15); color: #fff; }
 .status { pointer-events: auto; font: 500 13px/1 var(--ui); color: rgb(255 255 255 / .78); padding: 11px 14px; border-radius: 999px; white-space: nowrap; }
 .status::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--accent)); margin-right: 8px; vertical-align: 1px; }
 
 .dock { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 999px; box-shadow: 0 18px 50px rgb(0 0 0 / .35); }
 .ib { appearance: none; border: 0; background: transparent; color: #fff; height: 40px; min-width: 40px; padding: 0 10px; border-radius: 999px; display: inline-grid; place-items: center; cursor: pointer; font: 500 14px/1 var(--ui); transition: background .18s; }
-.ib:hover { background: rgb(255 255 255 / .1); }
+.ib:hover, .ib[aria-expanded="true"] { background: rgb(255 255 255 / .1); }
 .ib:disabled { opacity: .4; cursor: not-allowed; }
-.ib svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ib svg, .vol svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ib.txt { min-width: 58px; }
 .ib.sm { min-width: 32px; padding: 0 6px; font-size: 18px; }
 .offset { display: flex; align-items: center; }
 .offset output { min-width: 48px; text-align: center; font: 500 13px/1 var(--ui); font-variant-numeric: tabular-nums; color: rgb(255 255 255 / .8); }
 .sep { width: 1px; height: 22px; background: rgb(255 255 255 / .12); margin: 0 6px; }
-.rec-btn { appearance: none; border: 0; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px; border-radius: 999px; background: rgb(255 255 255 / .1); color: #fff; font: 600 14px/1 var(--ui); cursor: pointer; transition: background .18s; }
+.rec-btn { appearance: none; border: 0; display: flex; align-items: center; gap: 8px; height: 40px; white-space: nowrap; flex: none; padding: 0 16px 0 12px; border-radius: 999px; background: rgb(255 255 255 / .1); color: #fff; font: 600 14px/1 var(--ui); cursor: pointer; transition: background .18s; }
 .rec-btn:hover { background: rgb(255 255 255 / .17); }
 .rec-btn .dot { width: 12px; height: 12px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 0 3px rgb(255 77 94 / .25); }
 body.recording .rec-btn { background: rgb(255 77 94 / .22); }
 
+/* seek bar: YouTube and demo only */
+.scrub { position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 999px; }
+.scrub .t { font: 500 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: rgb(255 255 255 / .72); min-width: 34px; text-align: center; }
+.scrub #seek { flex: 1; }
+.vol { display: flex; align-items: center; gap: 6px; color: rgb(255 255 255 / .72); padding-left: 8px; border-left: 1px solid rgb(255 255 255 / .12); }
+.vol input { width: 84px; }
+input[type=range] { accent-color: rgb(var(--accent)); height: 18px; cursor: pointer; }
+
+/* style and size menus */
+.menu { position: absolute; pointer-events: auto; display: grid; gap: 2px; padding: 6px; border-radius: 18px; min-width: 260px; box-shadow: 0 18px 50px rgb(0 0 0 / .45); z-index: 3; animation: rise .18s var(--e); }
+.menu button { appearance: none; border: 0; background: transparent; color: #fff; display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; border-radius: 12px; cursor: pointer; font: inherit; }
+.menu button:hover, .menu button:focus-visible { background: rgb(255 255 255 / .1); outline: none; }
+.menu button[aria-checked="true"] { background: rgb(var(--accent) / .16); }
+.menu button::after { content: ""; margin-left: auto; flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.menu button[aria-checked="true"]::after { background: rgb(var(--accent)); box-shadow: 0 0 0 3px rgb(var(--accent) / .25); }
+.menu .mi { display: grid; gap: 4px; }
+.menu .ml { font: 600 15px/1.2 var(--ui); }
+.menu .md { font: 400 12px/1.3 var(--ui); color: rgb(255 255 255 / .62); }
+.ratio { flex: none; display: inline-block; border: 1.6px solid rgb(255 255 255 / .7); border-radius: 3px; }
+.ratio.r-fit { width: 26px; height: 18px; border-style: dashed; }
+.ratio.r-16x9 { width: 28px; height: 16px; }
+.ratio.r-9x16 { width: 12px; height: 21px; margin: 0 8px; }
+.ratio.r-1x1 { width: 19px; height: 19px; margin: 0 4px; }
+
 [data-tip] { position: relative; }
-[data-tip]:hover::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); white-space: nowrap; font: 500 12px/1 var(--ui); padding: 8px 10px; border-radius: 8px; background: rgb(0 0 0 / .78); color: #fff; pointer-events: none; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); white-space: nowrap; font: 500 12px/1 var(--ui); padding: 8px 10px; border-radius: 8px; background: rgb(0 0 0 / .78); color: #fff; pointer-events: none; }
+[data-tip][aria-expanded="true"]::after { display: none; }
 :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
 
 .recbar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 999px; background: rgb(28 4 8 / .62); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgb(255 77 94 / .38); font: 600 14px/1 var(--ui); font-variant-numeric: tabular-nums; z-index: 6; transition: opacity .6s var(--e); }
 .recbar .dot { width: 10px; height: 10px; border-radius: 50%; background: #ff4d5e; animation: blink 1.2s infinite; }
+body.rec-paused .recbar .dot { animation: none; background: #ffb020; }
+.recbar .bytes { font-weight: 500; color: rgb(255 255 255 / .6); }
 .recbar button { appearance: none; border: 0; border-radius: 999px; padding: 9px 13px; background: #ff4d5e; color: #fff; font: 600 13px/1 var(--ui); cursor: pointer; }
+.recbar button.soft { background: rgb(255 255 255 / .14); }
 body.idle .recbar { opacity: .5; }
 @keyframes blink { 50% { opacity: .25; } }
+
+.countdown { position: fixed; inset: 0; z-index: 25; display: grid; place-content: center; justify-items: center; gap: 10px; background: rgb(var(--tint, 10 10 18) / .62); -webkit-backdrop-filter: blur(18px) saturate(.8); backdrop-filter: blur(18px) saturate(.8); text-align: center; }
+.cd-num { font: 800 min(32vh, 220px)/1 var(--ui); font-variant-numeric: tabular-nums; text-shadow: 0 10px 60px rgb(0 0 0 / .5); }
+.cd-num.pop { animation: pop .9s var(--e); }
+.countdown p { margin: 0; font: 500 16px/1.4 var(--ui); color: rgb(255 255 255 / .8); }
+.countdown button { appearance: none; border: 0; margin-top: 8px; padding: 10px 18px; border-radius: 999px; background: rgb(255 255 255 / .14); color: #fff; font: 600 14px/1 var(--ui); cursor: pointer; }
+@keyframes pop { from { transform: scale(1.35); opacity: 0; } 30% { opacity: 1; } to { transform: scale(1); opacity: 1; } }
+
+.envbar { position: fixed; top: 0; left: 0; right: 0; z-index: 8; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; padding: 10px 52px 10px 16px; background: #3a2a06; border-bottom: 1px solid rgb(255 176 32 / .5); font: 500 14px/1.5 var(--ui); text-align: center; }
+.envbar a { color: #ffd27a; font-weight: 600; }
+.envbar button { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); appearance: none; border: 0; background: transparent; color: #fff; font-size: 22px; line-height: 1; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+.envbar:not([hidden]) ~ .ui .topbar { top: 64px; }
 
 .ytcard { position: fixed; right: 20px; top: 76px; width: 356px; border-radius: 14px; overflow: hidden; background: #000; border: 1px solid rgb(255 255 255 / .12); box-shadow: 0 18px 50px rgb(0 0 0 / .45); z-index: 4; }
 .ythead { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font: 500 12px/1 var(--ui); color: rgb(255 255 255 / .7); background: rgb(var(--tint) / .92); cursor: grab; user-select: none; touch-action: none; }
 .ythead::before { content: ""; width: 18px; height: 6px; border-top: 2px solid rgb(255 255 255 / .35); border-bottom: 2px solid rgb(255 255 255 / .35); }
 #ytplayer, .ytcard iframe { display: block; width: 356px; height: 200px; border: 0; }
 
-.toast { position: fixed; top: 74px; left: 50%; transform: translate(-50%, -8px); opacity: 0; pointer-events: none; max-width: min(640px, 90vw); padding: 12px 16px; border-radius: 14px; font: 500 14px/1.5 var(--ui); text-align: center; transition: opacity .25s, transform .25s var(--e); z-index: 30; }
-.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast { position: fixed; top: 74px; left: 50%; transform: translate(-50%, -8px); opacity: 0; pointer-events: none; max-width: min(640px, 90vw); display: flex; align-items: flex-start; gap: 6px; padding: 12px 8px 12px 16px; border-radius: 14px; font: 500 14px/1.55 var(--ui); transition: opacity .25s, transform .25s var(--e); z-index: 30; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast.sticky { border-color: rgb(255 176 32 / .55); }
+.toast .msg { flex: 1; text-align: left; }
+.toast .x { appearance: none; border: 0; background: transparent; color: rgb(255 255 255 / .7); font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 8px; cursor: pointer; }
+.toast .x:hover { color: #fff; background: rgb(255 255 255 / .1); }
 
 dialog.sheet { border: 0; padding: 0; background: transparent; color: #fff; width: min(560px, 92vw); max-width: none; max-height: 90vh; overflow: visible; }
 dialog.sheet.wide { width: min(720px, 94vw); }
@@ -92,7 +139,7 @@ select option { background: #1b1b22; }
 .row.end { justify-content: flex-end; }
 .row.between { justify-content: space-between; }
 .row .left { display: flex; gap: 8px; flex-wrap: wrap; }
-button.primary, button.ghost, button.mini { appearance: none; border: 0; height: 42px; padding: 0 18px; border-radius: 999px; font: 600 14px/1 var(--ui); cursor: pointer; transition: background .18s; }
+button.primary, button.ghost, button.mini { appearance: none; border: 0; height: 42px; padding: 0 18px; border-radius: 999px; font: 600 14px/1 var(--ui); cursor: pointer; transition: background .18s; white-space: nowrap; }
 button.mini { height: 32px; padding: 0 12px; font-size: 13px; }
 button.primary { background: #fff; color: #121218; }
 button.primary:hover { background: rgb(255 255 255 / .86); }
@@ -105,13 +152,12 @@ button.ghost:hover, button.mini:hover { background: rgb(255 255 255 / .15); }
 input[type=radio], input[type=checkbox] { accent-color: rgb(var(--accent)); width: 16px; height: 16px; margin: 0; }
 .check { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; cursor: pointer; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-input[type=range] { width: 100%; accent-color: rgb(var(--accent)); }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .rangehead { display: flex; justify-content: space-between; }
 .searchbar { display: flex; gap: 10px; margin: 12px 0; }
-.searchbar button { flex: none; white-space: nowrap; }
-button.primary, button.ghost { white-space: nowrap; }
+.searchbar button { flex: none; }
 .results { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; display: grid; gap: 6px; }
-.results .msg { padding: 14px 4px; color: rgb(255 255 255 / .6); }
+.results .msg, .pv-lines .msg { padding: 14px 4px; color: rgb(255 255 255 / .6); list-style: none; }
 .res { appearance: none; width: 100%; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid rgb(255 255 255 / .07); background: rgb(255 255 255 / .04); color: #fff; cursor: pointer; font: inherit; }
 .res:hover { background: rgb(255 255 255 / .09); }
 .r-main { display: grid; gap: 3px; min-width: 0; }
@@ -122,6 +168,12 @@ button.primary, button.ghost { white-space: nowrap; }
 .r-dur.off { color: #ffb4a2; }
 .badge { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: rgb(255 255 255 / .08); color: rgb(255 255 255 / .62); white-space: nowrap; }
 .badge.on { background: rgb(var(--accent) / .2); color: rgb(var(--accent)); }
+.preview { border: 1px solid rgb(255 255 255 / .08); border-radius: 16px; padding: 16px 18px 4px; background: rgb(0 0 0 / .18); }
+.pv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pv-head h3 { margin: 0; font: 700 17px/1.3 var(--ui); }
+.pv-head p { margin: 4px 0 0; font-size: 13px; color: rgb(255 255 255 / .6); }
+.pv-lines { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; max-height: 30vh; overflow: auto; font: 500 16px/1.5 var(--ui); color: rgb(255 255 255 / .86); }
+.preview .row { margin-top: 14px; padding-bottom: 12px; }
 .keys h3 { margin: 22px 0 8px; font: 600 14px/1 var(--ui); color: rgb(255 255 255 / .66); }
 .keys dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; align-items: center; }
 .keys dd { margin: 0; color: rgb(255 255 255 / .7); }
@@ -132,7 +184,7 @@ body.dragging .drop { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .ui, .toast, .recbar { transition: none; }
   .recbar .dot { animation: none; }
-  dialog.sheet[open] { animation: none; }
+  dialog.sheet[open], .menu, .cd-num.pop { animation: none; }
 }
 @media (max-width: 720px) {
   .dock { gap: 0; padding: 4px; bottom: 12px; }
@@ -140,31 +192,59 @@ body.dragging .drop { opacity: 1; }
   .ib.txt { min-width: 44px; }
   .sep { margin: 0 2px; }
   .rec-btn { padding: 0 12px 0 10px; }
+  .scrub { bottom: 70px; }
+  .vol input { width: 60px; }
   .seg button { padding: 9px 11px; }
   .status { display: none; }
-  .ytcard { width: 300px; right: 10px; }
-  #ytplayer, .ytcard iframe { width: 300px; height: 200px; }
-  .grid2 { grid-template-columns: 1fr; }
+  .ytcard { width: 200px; right: 10px; top: 64px; } /* YouTube's smallest allowed player: 200 × 200 */
+  #ytplayer, .ytcard iframe { width: 200px; height: 200px; }
+  .grid2, .grid3 { grid-template-columns: 1fr; }
+}
+/* small phones: after the 720px rules so these win */
+@media (max-width: 420px) {
+  .ib { min-width: 30px; padding: 0 4px; }
+  .ib.txt { min-width: 38px; }
+  .rec-btn { gap: 6px; padding: 0 10px 0 8px; }
+}
+@media (max-width: 370px) {
+  .dock .sep { display: none; }
 }
 
 </style>
 </head>
 <body>
-<canvas id="stage" width="1920" height="1080" aria-label="歌詞畫面"></canvas>
+<canvas id="stage" width="1920" height="1080" role="img" aria-label="歌詞畫面"></canvas>
+<p class="sr-only" id="srLyric" aria-live="polite" aria-atomic="true"></p>
+
+<div class="envbar" id="envBar" role="alert" hidden>
+  <span id="envMsg"></span>
+  <a id="envLink" href="#">開啟線上版</a>
+  <button type="button" id="envClose" aria-label="關閉提示">×</button>
+</div>
 
 <div class="ui" id="ui">
   <header class="topbar">
-    <div class="seg glass" role="tablist" aria-label="音樂來源">
-      <button type="button" role="tab" data-src="spotify">Spotify</button>
-      <button type="button" role="tab" data-src="youtube">YouTube</button>
-      <button type="button" role="tab" data-src="demo">示範</button>
+    <div class="seg glass" role="group" aria-label="音樂來源">
+      <button type="button" data-src="spotify" aria-pressed="false">Spotify</button>
+      <button type="button" data-src="youtube" aria-pressed="false">YouTube</button>
+      <button type="button" data-src="demo" aria-pressed="false">示範</button>
     </div>
     <div class="status glass" id="status" aria-live="polite"></div>
   </header>
 
+  <div class="scrub glass" id="scrub" hidden>
+    <span class="t" id="tCur">0:00</span>
+    <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="播放進度">
+    <span class="t" id="tDur">0:00</span>
+    <label class="vol" id="volWrap" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <input type="range" id="vol" min="0" max="100" step="1" value="100" aria-label="音量">
+    </label>
+  </div>
+
   <nav class="dock glass" aria-label="控制列">
     <button type="button" class="ib" id="btnSearch" data-tip="搜尋歌詞（L）" aria-label="搜尋歌詞">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
     </button>
     <div class="offset" data-tip="歌詞太早或太晚時調整（[ ]）">
       <button type="button" class="ib sm" id="offMinus" aria-label="歌詞提早 0.1 秒">−</button>
@@ -172,28 +252,37 @@ body.dragging .drop { opacity: 1; }
       <button type="button" class="ib sm" id="offPlus" aria-label="歌詞延後 0.1 秒">+</button>
     </div>
     <span class="sep"></span>
-    <button type="button" class="ib txt" id="btnTheme" data-tip="切換風格（T）">流光</button>
-    <button type="button" class="ib txt" id="btnLayout" data-tip="切換畫面比例（V）">填滿</button>
+    <button type="button" class="ib txt" id="btnTheme" data-tip="風格（T）" aria-haspopup="menu" aria-expanded="false">流光</button>
+    <button type="button" class="ib txt" id="btnLayout" data-tip="畫面比例（V）" aria-haspopup="menu" aria-expanded="false">填滿</button>
     <button type="button" class="ib" id="btnSettings" data-tip="設定" aria-label="設定">
-      <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
     </button>
     <button type="button" class="ib" id="btnFull" data-tip="全螢幕（F）" aria-label="全螢幕">
-      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
     </button>
     <span class="sep"></span>
     <button type="button" class="rec-btn" id="btnRec" data-tip="錄影（R）"><span class="dot"></span><span class="lbl">錄影</span></button>
   </nav>
 </div>
 
-<div class="recbar" id="recbar" hidden><span class="dot"></span><span id="recTime">0:00</span><button type="button" id="recStop">停止錄影</button></div>
+<div class="recbar" id="recbar" hidden>
+  <span class="dot"></span><span id="recTime">0:00</span><span class="bytes" id="recBytes">0.0 MB</span>
+  <button type="button" class="soft" id="recPause">暫停</button>
+  <button type="button" id="recStop">停止錄影</button>
+</div>
+<div class="countdown" id="countdown" hidden>
+  <div class="cd-num" id="cdNum" aria-live="assertive">3</div>
+  <p>準備開始錄影</p>
+  <button type="button" id="cdCancel">取消</button>
+</div>
 <div class="ytcard" id="ytcard" hidden><div class="ythead">YouTube 播放器（可拖曳）</div><div id="ytplayer"></div></div>
-<div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+<div class="toast glass" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="x" aria-label="關閉訊息">×</button></div>
 <div class="drop" aria-hidden="true">放開來匯入 LRC 歌詞</div>
 
 <dialog class="sheet" id="dlgSpotify" aria-labelledby="spTitle">
   <div class="sheet-in">
     <h2 id="spTitle">連接 Spotify</h2>
-    <p class="lead">讀取你正在播放的歌和進度，任何裝置上播都可以。Spotify 規定開發模式的 App 擁有者要有 Premium。</p>
+    <p class="lead">讀取你正在播放的歌和進度，任何裝置上播都可以。Spotify 規定開發模式的 App 擁有者要有 Premium。這個程式只要求「讀取正在播放」的權限，不能控制你的播放。</p>
     <div class="warn" id="spWarn" hidden></div>
     <ol class="steps">
       <li>打開 <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify 開發者後台</a>，按 Create app，名稱和說明隨便填。</li>
@@ -223,9 +312,19 @@ body.dragging .drop { opacity: 1; }
   <form class="sheet-in" id="searchForm">
     <h2 id="sTitle">搜尋歌詞</h2>
     <div class="searchbar"><input id="q" autofocus autocomplete="off" spellcheck="false" placeholder="歌名，或歌名加歌手"><button type="submit" class="primary">搜尋</button></div>
-    <ul class="results" id="results"></ul>
+    <div id="searchList">
+      <ul class="results" id="results"></ul>
+    </div>
+    <div class="preview" id="preview" hidden>
+      <div class="pv-head">
+        <div><h3 id="pvTitle"></h3><p id="pvMeta"></p></div>
+        <span class="badge on" id="pvKind"></span>
+      </div>
+      <ol class="pv-lines" id="pvLines"></ol>
+      <div class="row end"><button type="button" class="ghost" id="pvBack">返回結果</button><button type="button" class="primary" id="pvApply">套用這份歌詞</button></div>
+    </div>
     <div class="row between">
-      <div class="left"><button type="button" class="ghost" id="btnImport">匯入 LRC 檔</button><button type="button" class="ghost" id="btnAuto">改回自動配對</button></div>
+      <div class="left"><button type="button" class="ghost" id="btnImport">匯入 LRC 檔</button><button type="button" class="ghost" id="btnAuto">改回自動配對</button><button type="button" class="ghost" id="btnNone">這首不顯示歌詞</button></div>
       <button type="button" class="ghost" id="searchClose">關閉</button>
     </div>
   </form>
@@ -243,10 +342,12 @@ body.dragging .drop { opacity: 1; }
       <label><input type="radio" name="aud" value="both"> 電腦聲音加麥克風</label>
     </fieldset>
     <p class="hint" id="recHint"></p>
-    <div class="grid2">
+    <div class="grid3">
       <label class="field"><span>流暢度</span><select id="recFps"><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
       <label class="field"><span>畫質</span><select id="recQ"><option value="std">標準（8 Mbps）</option><option value="high">高（16 Mbps）</option></select></label>
+      <label class="field"><span>檔案格式</span><select id="recFmt"><option value="auto">自動（優先 MP4）</option><option value="webm">WebM</option></select></label>
     </div>
+    <label class="check"><input type="checkbox" id="recCd"> 開始前倒數 3 秒</label>
     <label class="check"><input type="checkbox" id="recAuto"> 換歌或播完時自動停止</label>
     <div class="row end"><button type="button" class="ghost" id="recCancel">取消</button><button type="submit" class="primary">開始錄影</button></div>
   </form>
@@ -258,9 +359,10 @@ body.dragging .drop { opacity: 1; }
     <label class="check"><input type="checkbox" id="setKaraoke"> 唱到哪裡亮到哪裡（卡拉OK 填色）</label>
     <label class="check"><input type="checkbox" id="setBlur"> 遠處的歌詞模糊</label>
     <label class="check"><input type="checkbox" id="setInfo"> 顯示封面和歌名</label>
+    <label class="check"><input type="checkbox" id="setCredit"> 電影風格：開頭顯示歌名</label>
     <div class="grid2">
       <label class="field"><span>對齊</span><select id="setAlign"><option value="auto">自動</option><option value="left">靠左</option><option value="center">置中</option></select></label>
-      <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05"></label>
+      <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05" value="1"></label>
     </div>
     <div class="keys">
       <h3>快捷鍵</h3>
@@ -272,9 +374,11 @@ body.dragging .drop { opacity: 1; }
         <dt><kbd>T</kbd></dt><dd>切換風格：流光、明體、電影</dd>
         <dt><kbd>V</kbd></dt><dd>切換比例：填滿、16:9、9:16、1:1</dd>
         <dt><kbd>R</kbd></dt><dd>開始或停止錄影</dd>
+        <dt><kbd>P</kbd></dt><dd>錄影時暫停或繼續</dd>
         <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
         <dt><kbd>H</kbd></dt><dd>隱藏或顯示介面</dd>
       </dl>
+      <p class="hint">YouTube 和示範模式：點一行歌詞就跳到那裡，在空白處點兩下播放或暫停。</p>
     </div>
     <div class="row between"><button type="button" class="ghost" id="setOffReset">偏移歸零</button><button type="button" class="primary" data-close>完成</button></div>
   </div>
@@ -305,12 +409,51 @@ function hashStr(s) {
   return h >>> 0;
 }
 
-/* localStorage can throw (privacy modes, embedded frames) — never let it break the app */
+/* localStorage can throw (privacy modes, embedded frames, quota) — never let it break the app */
 const Store = {
   get(k, d) { try { const v = localStorage.getItem('ls.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('ls.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+  set(k, v) { try { localStorage.setItem('ls.' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem('ls.' + k); } catch (e) { /* ignore */ } },
 };
+
+/* how the page was opened decides what can work: Spotify wants https or a loopback IP,
+   the YouTube player needs a real web origin, recording needs a secure context */
+const Env = {
+  kind() {
+    if (location.protocol === 'file:') return 'file';
+    const h = location.hostname;
+    if (h === 'localhost' || h.endsWith('.localhost')) return 'localhost';
+    if (location.protocol === 'https:') return 'https';
+    if (h === '127.0.0.1' || h === '[::1]') return 'loopback';
+    return 'http';
+  },
+  can(feature) {
+    const k = this.kind();
+    if (feature === 'spotify') return k === 'https' || k === 'loopback';
+    if (feature === 'youtube') return k !== 'file';
+    if (feature === 'record') return !!window.isSecureContext;
+    return true;
+  },
+};
+
+/* fetch that gives up after `ms` and can also be cancelled by the caller's signal */
+async function fetchT(url, opts = {}, ms = 10000) {
+  const ctl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
+  const outer = opts.signal;
+  const onOuter = () => ctl.abort();
+  if (outer) { if (outer.aborted) ctl.abort(); else outer.addEventListener('abort', onOuter, { once: true }); }
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+  } catch (e) {
+    if (timedOut) throw Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' });
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    if (outer) outer.removeEventListener('abort', onOuter);
+  }
+}
 
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
@@ -404,15 +547,37 @@ async function sha256b64url(str) {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/* Chinese .lrc files are often GBK or Big5, not UTF-8: pick the decoding that yields the most common characters */
+const COMMON_HAN = '的一是不了人我在有他這这中大來来上國国個个到說说們们為为子和你地出道也時时年得就那要下以生會会自著着去之過过家學学對对可她裡里後后小麼么心多天而能好都然沒没日於于起還还發发成事只作當当想看文無无開开手十用主行方又如前所本見见經经頭头面公同三已老從从動动兩两長长知民樣样現现分將将外但身些與与高意進进把法此實实回二理美點点月明其種种聲声全工己話话兒儿者向情部正名定女問问力機机給给等幾几很業业最間间新什打便位因重被走電电四第門门相次東东政海口使教西再平真聽听世氣气信北少關关並并內内加化由卻却代軍军產产入先山五太水萬万市眼體体別别處处總总才場场師师書书愛爱夢梦風风雨淚泪笑走路愛夜光';
+function decodeText(buf) {
+  const b = new Uint8Array(buf);
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(b);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { /* not UTF-8 */ }
+  let best = null, bestScore = -Infinity;
+  for (const enc of ['gb18030', 'big5', 'shift_jis', 'euc-kr', 'windows-1252']) {
+    let s;
+    try { s = new TextDecoder(enc).decode(b); } catch (e) { continue; }
+    let score = 0;
+    for (const ch of s) { if (ch === '�') score -= 5; else if (COMMON_HAN.includes(ch)) score += 1; }
+    if (score > bestScore) { best = s; bestScore = score; }
+  }
+  return best != null ? best : new TextDecoder('utf-8').decode(b);
+}
+
+/* toasts: ms = 0 keeps it on screen until closed (for errors the user has to act on) */
 let toastTimer = 0;
 function toast(msg, ms = 3400) {
   const el = $('#toast');
   if (!el) return;
-  el.textContent = msg;
+  const m = el.querySelector('.msg') || el;
+  m.textContent = msg;
   el.classList.add('show');
+  el.classList.toggle('sticky', ms === 0);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+  if (ms > 0) toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
+function hideToast() { const el = $('#toast'); if (el) el.classList.remove('show'); clearTimeout(toastTimer); }
 
 function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);
@@ -567,7 +732,20 @@ const LRC = (() => {
     return ans;
   }
 
-  return { parse, buildTimeline, activeIndex, estimate };
+  /* what an imported file holds: synced lines, plain text, nothing, or not text at all */
+  function inspect(text) {
+    const s = String(text || '');
+    if (!s.trim()) return { kind: 'empty', lines: 0 };
+    const control = (s.match(/[\u0000-\u0008\u000E-\u001F]/g) || []).length;
+    const broken = (s.match(/�/g) || []).length;
+    if (control > 3 || broken > Math.max(3, s.length * 0.05)) return { kind: 'binary', lines: 0 };
+    const synced = parse(s).lines.filter(l => l.text).length;
+    if (synced) return { kind: 'synced', lines: synced };
+    const plain = s.replace(/\r/g, '').split('\n').filter(l => l.trim() && !/^\s*\[[a-z#]+:.*\]\s*$/i.test(l)).length;
+    return plain ? { kind: 'plain', lines: plain } : { kind: 'empty', lines: 0 };
+  }
+
+  return { parse, buildTimeline, activeIndex, estimate, inspect };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = LRC;
 
@@ -635,23 +813,25 @@ const Palette = (() => {
 /* ---------- LRCLIB client (free synced-lyrics database, CORS enabled) ---------- */
 const Lyrics = (() => {
   const API = 'https://lrclib.net/api';
-  const CLIENT = 'LyricsStudio/1.0 (personal lyrics player)';
+  const CLIENT = 'LyricsStudio/1.1 (personal lyrics player)';
+  const DISK_KEY = 'lyricsCache', DISK_MAX = 40, DISK_DAYS = 30, MISS_HOURS = 24;
   let headerOk = true, last = 0, blockedUntil = 0;
-  const cache = new Map();
+  const mem = new Map();
+  const api = { timeoutMs: 10000 };
 
-  async function call(path) {
+  async function call(path, signal) {
     const now = performance.now();
     if (now < blockedUntil) await sleep(blockedUntil - now);
-    const wait = last + 300 - performance.now(); // requests one at a time, gently spaced
+    const wait = last + 300 - performance.now(); // one request at a time, gently spaced
     if (wait > 0) await sleep(wait);
     last = performance.now();
     let res;
     try {
-      res = await fetch(API + path, headerOk ? { headers: { 'Lrclib-Client': CLIENT } } : undefined);
+      res = await fetchT(API + path, headerOk ? { headers: { 'Lrclib-Client': CLIENT }, signal } : { signal }, api.timeoutMs);
     } catch (e) {
-      if (!headerOk) throw e;
+      if (!headerOk || e.name !== 'TypeError') throw e; // timeouts and cancels are not header problems
       headerOk = false; // custom header refused by the CORS preflight: retry without it
-      res = await fetch(API + path);
+      res = await fetchT(API + path, { signal }, api.timeoutMs);
     }
     if (res.status === 429) {
       const ra = parseFloat(res.headers.get('Retry-After')) || 10;
@@ -660,8 +840,8 @@ const Lyrics = (() => {
     }
     return res;
   }
-  async function json(path) {
-    const r = await call(path);
+  async function json(path, signal) {
+    const r = await call(path, signal);
     if (r.status === 404) return null;
     if (!r.ok) throw new Error('HTTP_' + r.status);
     const ct = r.headers.get('content-type') || '';
@@ -669,9 +849,33 @@ const Lyrics = (() => {
     return r.json();
   }
   const qs = o => Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
-  const get = p => json('/get?' + qs(p));
-  const search = p => json('/search?' + qs(p)).then(r => (Array.isArray(r) ? r : []));
-  const byId = id => json('/get/' + encodeURIComponent(id));
+  const get = (p, signal) => json('/get?' + qs(p), signal);
+  const search = (p, signal) => json('/search?' + qs(p), signal).then(r => (Array.isArray(r) ? r : []));
+  const byId = (id, signal) => json('/get/' + encodeURIComponent(id), signal);
+
+  /* found lyrics survive a reload: a small least-recently-used store in localStorage */
+  const slim = r => r && { id: r.id, trackName: r.trackName || r.name, artistName: r.artistName, albumName: r.albumName, duration: r.duration, instrumental: !!r.instrumental, syncedLyrics: r.syncedLyrics || null, plainLyrics: r.plainLyrics || null };
+  function diskGet(key) {
+    const all = Store.get(DISK_KEY, {});
+    const hit = all[key];
+    if (!hit) return undefined;
+    const age = Date.now() - hit.at;
+    if (age > (hit.r ? DISK_DAYS * 864e5 : MISS_HOURS * 36e5)) return undefined;
+    return hit.r; // null = "looked recently, nothing there"
+  }
+  function diskPut(key, r) {
+    const all = Store.get(DISK_KEY, {});
+    all[key] = { r: slim(r), at: Date.now() };
+    const keys = Object.keys(all).sort((a, b) => all[b].at - all[a].at);
+    for (const k of keys.slice(DISK_MAX)) delete all[k];
+    if (!Store.set(DISK_KEY, all)) { Store.del(DISK_KEY); Store.set(DISK_KEY, { [key]: all[key] }); }
+  }
+  function remember(key, r) { mem.set(key, r); diskPut(key, r); }
+  function forget(key) {
+    mem.delete(key);
+    const all = Store.get(DISK_KEY, {});
+    if (all[key]) { delete all[key]; Store.set(DISK_KEY, all); }
+  }
 
   function cleanTitle(s) {
     return String(s || '')
@@ -703,70 +907,91 @@ const Lyrics = (() => {
   }
   const usable = r => r && (r.syncedLyrics || r.instrumental);
 
-  async function find(t, { force = false } = {}) {
-    if (!force && cache.has(t.key)) return cache.get(t.key);
+  async function find(t, { force = false, signal } = {}) {
     const manual = Store.get('lyricsPick.' + t.key, null);
+    if (manual === 'none') return { none: true };
+    if (!force && mem.has(t.key)) return mem.get(t.key);
+    if (!force) { const d = diskGet(t.key); if (d !== undefined && (!manual || (d && d.id === manual))) { mem.set(t.key, d); return d; } }
     if (manual) {
-      try { const r = await byId(manual); if (r) { cache.set(t.key, r); return r; } } catch (e) { if (e.message === 'RATE_LIMIT') throw e; }
+      try { const r = await byId(manual, signal); if (r) { remember(t.key, r); return r; } }
+      catch (e) { if (e.message === 'RATE_LIMIT' || e.name === 'AbortError' || e.code === 'TIMEOUT') throw e; }
     }
     const artist0 = firstArtist(t.artist);
     const dur = t.duration ? Math.round(t.duration) : undefined;
     let rec = null, plain = null;
-    const soft = async fn => { try { return await fn(); } catch (e) { if (e.message === 'RATE_LIMIT') throw e; return null; } };
+    const soft = async fn => {
+      try { return await fn(); }
+      catch (e) { if (e.message === 'RATE_LIMIT' || e.name === 'AbortError' || e.code === 'TIMEOUT') throw e; return null; }
+    };
 
     if (t.title && artist0) {
-      const r = await soft(() => get({ track_name: t.title, artist_name: artist0, album_name: t.album, duration: dur }));
+      const r = await soft(() => get({ track_name: t.title, artist_name: artist0, album_name: t.album, duration: dur }, signal));
       if (usable(r)) rec = r; else if (r && r.plainLyrics) plain = r;
       const ct = cleanTitle(t.title);
       if (!rec && (ct !== t.title || t.album)) {
-        const r2 = await soft(() => get({ track_name: ct, artist_name: artist0, duration: dur }));
+        const r2 = await soft(() => get({ track_name: ct, artist_name: artist0, duration: dur }, signal));
         if (usable(r2)) rec = r2; else if (r2 && r2.plainLyrics) plain = plain || r2;
       }
     }
     if (!rec && t.title) {
       const lists = [];
-      lists.push(...((await soft(() => search({ track_name: cleanTitle(t.title), artist_name: artist0 || undefined }))) || []));
-      if (!lists.some(r => r.syncedLyrics)) lists.push(...((await soft(() => search({ q: [cleanTitle(t.title), artist0].filter(Boolean).join(' ') }))) || []));
-      if (!lists.some(r => r.syncedLyrics) && artist0) lists.push(...((await soft(() => search({ q: cleanTitle(t.title) }))) || []));
+      lists.push(...((await soft(() => search({ track_name: cleanTitle(t.title), artist_name: artist0 || undefined }, signal))) || []));
+      if (!lists.some(r => r.syncedLyrics)) lists.push(...((await soft(() => search({ q: [cleanTitle(t.title), artist0].filter(Boolean).join(' ') }, signal))) || []));
+      if (!lists.some(r => r.syncedLyrics) && artist0) lists.push(...((await soft(() => search({ q: cleanTitle(t.title) }, signal))) || []));
       rec = best(lists.filter(usable), t);
       if (!rec) plain = plain || best(lists.filter(r => r.plainLyrics), t);
     }
     const result = rec || plain || null;
-    cache.set(t.key, result);
+    remember(t.key, result);
     return result;
   }
-  return { find, search, byId, cleanTitle, score, clearCache: k => cache.delete(k) };
+  return Object.assign(api, { find, search, byId, cleanTitle, score, remember, clearCache: forget });
 })();
 
-/* ---------- playback clock: smooth between sparse position reports ---------- */
+/* ---------- playback clock ----------
+   `truth` follows the latest report exactly. What we show stays continuous: after each report the
+   gap between what was on screen and the truth fades out over ~0.3 s, including play/pause flips.
+   Only real seeks (or a new track) jump. */
 class Clock {
-  constructor() { this.pos = 0; this.at = performance.now(); this.playing = false; }
-  now(ts = performance.now()) { return this.pos + (this.playing ? (ts - this.at) / 1000 : 0); }
+  constructor() { this.pos = 0; this.at = performance.now(); this.playing = false; this.corr = 0; this.corrAt = 0; }
+  truth(ts = performance.now()) { return this.pos + (this.playing ? (ts - this.at) / 1000 : 0); }
+  correction(ts) {
+    if (!this.corr) return 0;
+    const k = Math.exp(-(ts - this.corrAt) / 110);
+    if (k < 0.002) { this.corr = 0; return 0; }
+    return this.corr * k;
+  }
+  now(ts = performance.now()) { return this.truth(ts) + this.correction(ts); }
   sync(pos, playing, ts = performance.now(), hard = false) {
-    const predicted = this.now(ts);
-    const diff = pos - predicted;
-    if (!hard && this.playing && playing && Math.abs(diff) < 0.6) {
-      this.pos = predicted + diff * 0.35; // ease toward the report instead of jumping
-    } else {
-      this.pos = pos;
-    }
-    this.at = ts;
-    this.playing = playing;
+    const shown = this.now(ts);
+    this.pos = pos; this.at = ts; this.playing = playing;
+    const gap = shown - pos;
+    if (!hard && Math.abs(gap) < 1.5) { this.corr = gap; this.corrAt = ts; } else this.corr = 0;
   }
 }
 
-/* ---------- Spotify: Web API, Authorization Code + PKCE (no secret needed) ---------- */
+/* ---------- Spotify: Web API, Authorization Code + PKCE (no secret needed) ----------
+   Only one tab polls Spotify (it holds a Web Lock); the others get its results over a
+   BroadcastChannel. A hidden leader hands the job to a visible tab. */
+const SP_LOCK = 'lyrics-studio-spotify-poll';
+const SP_IDLE = {
+  login: { title: '還沒連接 Spotify', hint: '點上方的 Spotify 完成設定', status: 'Spotify 未連接' },
+  nothing: { title: 'Spotify 目前沒有在播放', hint: '在任何裝置上播一首歌，這裡就會跟著顯示', status: 'Spotify 待命' },
+  ad: { title: '廣告播放中', hint: '廣告結束後會接回歌詞', status: 'Spotify 播廣告中' },
+  episode: { title: '正在播放 Podcast', hint: 'Podcast 沒有同步歌詞', status: 'Spotify 播 Podcast 中' },
+  denied: { title: 'Spotify 拒絕存取', hint: '開發模式需要 App 擁有者有 Premium', status: 'Spotify 拒絕存取' },
+  env: { title: '這個網址不能登入 Spotify', hint: '改用線上版，或用 start.bat 開啟', status: 'Spotify 無法使用' },
+};
 class SpotifySource {
-  constructor(app) { this.app = app; this.active = false; this.timer = 0; this.loop = 0; this.warned403 = false; }
+  constructor(app) {
+    this.app = app; this.active = false; this.timer = 0; this.loop = 0; this.gen = 0;
+    this.leader = false; this.unlock = null; this.ch = null; this.hb = 0; this.warned403 = false;
+    this.canSeek = false; this.hasVolume = false;
+  }
   get clientId() { return Store.get('spotify.clientId', ''); }
   get token() { return Store.get('spotify.token', null); }
   redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
-  originProblem() {
-    if (location.protocol === 'file:') return 'file';
-    if (location.hostname === 'localhost') return 'localhost';
-    if (location.protocol === 'http:' && !['127.0.0.1', '[::1]'].includes(location.hostname)) return 'http';
-    return null;
-  }
+  originProblem() { return Env.can('spotify') ? null : Env.kind(); }
   async login(clientId) {
     Store.set('spotify.clientId', clientId);
     const verifier = randomString(64);
@@ -790,13 +1015,13 @@ class SpotifySource {
     if (!pk || pk.state !== q.get('state')) { toast('登入流程對不上，請重新連接 Spotify', 6000); return true; }
     try {
       const body = new URLSearchParams({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: pk.redirect, client_id: this.clientId, code_verifier: pk.verifier });
-      const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const r = await fetchT('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }, 10000);
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { toast('Spotify 登入失敗：' + (j.error_description || j.error || r.status), 7000); return true; }
+      if (!r.ok) { toast('Spotify 登入失敗：' + (j.error_description || j.error || r.status), 0); return true; }
       this.saveToken(j);
       Store.del('spotify.pkce');
       toast('已連接 Spotify');
-    } catch (e) { toast('連不到 Spotify 登入伺服器，檢查網路後再試', 6000); }
+    } catch (e) { toast('連不到 Spotify 登入伺服器，檢查網路後再試', 0); }
     return true;
   }
   saveToken(j) {
@@ -807,7 +1032,7 @@ class SpotifySource {
     const t = this.token;
     if (!t || !t.refresh) throw new Error('NO_REFRESH');
     const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: this.clientId });
-    const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const r = await fetchT('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }, 10000);
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (j.error === 'invalid_grant' || j.error === 'invalid_client') Store.del('spotify.token');
@@ -822,38 +1047,95 @@ class SpotifySource {
     if (Date.now() < t.exp) return t.access;
     return this.refresh();
   }
-  logout() { Store.del('spotify.token'); this.app.onIdle('spotify-login'); }
-  start() { this.active = true; this.warned403 = false; const id = ++this.loop; this.poll(id); }
-  stop() { this.active = false; this.loop++; clearTimeout(this.timer); }
-  async poll(id) {
-    if (!this.active || id !== this.loop) return;
+  logout() { Store.del('spotify.token'); this.idle('login'); }
+
+  /* ----- who polls ----- */
+  start() {
+    this.active = true; this.warned403 = false;
+    const id = ++this.loop;
+    if (!this.ch && typeof BroadcastChannel !== 'undefined') { try { this.ch = new BroadcastChannel('lyrics-studio-spotify'); } catch (e) { this.ch = null; } }
+    if (this.ch) {
+      this.ch.onmessage = ev => this.onPeer(ev.data, id);
+      clearInterval(this.hb);
+      this.hb = setInterval(() => this.sayVisible(), 3000);
+    }
+    this.app.setStatus('Spotify 連線中…');
+    this.candidate(id);
+    this.sayVisible();
+  }
+  stop() {
+    this.active = false; this.loop++; this.gen++; this.leader = false;
+    clearTimeout(this.timer); clearInterval(this.hb);
+    if (this.unlock) { this.unlock(); this.unlock = null; }
+    if (this.ch) this.ch.onmessage = null;
+  }
+  candidate(id) {
+    if (!(navigator.locks && navigator.locks.request)) { this.lead(id); return; }
+    navigator.locks.request(SP_LOCK, () => {
+      if (!this.active || id !== this.loop) return undefined; // stopped while waiting: hand it straight back
+      this.lead(id);
+      return new Promise(res => { this.unlock = res; });
+    }).catch(() => { if (this.active && id === this.loop && !this.leader) this.lead(id); });
+  }
+  lead(id) { this.leader = true; const gen = ++this.gen; this.poll(id, gen); }
+  yieldLead() {
+    if (!this.leader) return;
+    this.leader = false; this.gen++; clearTimeout(this.timer);
+    const u = this.unlock; this.unlock = null;
+    if (u) u();
+    this.candidate(this.loop); // queue up again behind the visible tab
+  }
+  onVisible() {
+    if (!this.active) return;
+    if (this.leader) { clearTimeout(this.timer); const gen = ++this.gen; this.poll(this.loop, gen); } // refresh right away
+    else this.sayVisible();
+  }
+  sayVisible() { if (this.ch && this.active && !this.leader && !document.hidden) { try { this.ch.postMessage({ type: 'visible' }); } catch (e) { /* closed */ } } }
+  post(m) { if (this.ch && this.leader) { try { this.ch.postMessage(m); } catch (e) { /* closed */ } } }
+  onPeer(m, id) {
+    if (!this.active || id !== this.loop || !m) return;
+    if (m.type === 'visible') { if (this.leader && document.hidden) this.yieldLead(); return; }
+    if (this.leader) return;
+    if (m.type === 'playback') this.app.onPlayback(m.track, m.pos + (m.playing ? (Date.now() - m.wall) / 1000 : 0), m.playing);
+    else if (m.type === 'idle') this.idle(m.kind, true);
+    else if (m.type === 'status') this.app.setStatus(m.text);
+  }
+  idle(kind, fromPeer) {
+    this.app.onIdle(Object.assign({ key: 'spotify-' + kind }, SP_IDLE[kind]));
+    if (!fromPeer) this.post({ type: 'idle', kind });
+  }
+  status(text) { this.app.setStatus(text); this.post({ type: 'status', text }); }
+
+  async poll(id, gen) {
+    const live = () => this.active && id === this.loop && gen === this.gen && this.leader;
+    if (!live()) return;
     let next = 1000;
     try {
-      if (!this.token) { this.app.onIdle('spotify-login'); next = 3000; }
+      if (!this.token) { this.idle(Env.can('spotify') ? 'login' : 'env'); next = 3000; }
       else {
         let tok = await this.accessToken();
-        const t0 = performance.now();
         const url = 'https://api.spotify.com/v1/me/player/currently-playing';
-        let r = await fetch(url, { headers: { Authorization: 'Bearer ' + tok } });
-        if (r.status === 401) { tok = await this.refresh(); r = await fetch(url, { headers: { Authorization: 'Bearer ' + tok } }); }
+        const t0 = performance.now();
+        let r = await fetchT(url, { headers: { Authorization: 'Bearer ' + tok } }, 8000);
+        if (r.status === 401) { tok = await this.refresh(); r = await fetchT(url, { headers: { Authorization: 'Bearer ' + tok } }, 8000); }
         const t1 = performance.now();
-        if (id !== this.loop) return;
-        if (r.status === 204 || r.status === 202) { this.app.onIdle('spotify-nothing'); next = 2500; }
+        if (!live()) return;
+        if (r.status === 204 || r.status === 202) { this.idle('nothing'); next = 2500; }
         else if (r.status === 429) {
           next = (parseFloat(r.headers.get('Retry-After')) || 5) * 1000 + 500;
-          this.app.setStatus('Spotify 請求太頻繁，稍等一下');
+          this.status('Spotify 請求太頻繁，稍等一下');
         } else if (r.status === 403) {
           const j = await r.json().catch(() => ({}));
           if (!this.warned403) {
             this.warned403 = true;
-            toast('Spotify 拒絕存取：' + ((j.error && j.error.message) || '403') + '。開發模式需要 App 擁有者有 Premium。', 9000);
+            toast('Spotify 拒絕存取：' + ((j.error && j.error.message) || '403') + '。開發模式需要 App 擁有者有 Premium；用別的帳號登入時，要先在 App 的 User Management 加入那個帳號。', 0);
           }
-          this.app.onIdle('spotify-denied');
+          this.idle('denied');
           next = 15000;
         } else if (r.ok) {
           const j = await r.json();
           if (!j || !j.item) {
-            this.app.onIdle(j && j.currently_playing_type === 'ad' ? 'spotify-ad' : j && j.currently_playing_type === 'episode' ? 'spotify-episode' : 'spotify-nothing');
+            this.idle(j && j.currently_playing_type === 'ad' ? 'ad' : j && j.currently_playing_type === 'episode' ? 'episode' : 'nothing');
             next = 2500;
           } else {
             const it = j.item;
@@ -868,19 +1150,20 @@ class SpotifySource {
             };
             const pos = (j.progress_ms || 0) / 1000 + (j.is_playing ? (t1 - t0) / 2000 : 0);
             this.app.onPlayback(track, pos, !!j.is_playing, t1);
+            this.post({ type: 'playback', track, pos, playing: !!j.is_playing, wall: Date.now() });
             next = j.is_playing ? 1000 : 2000;
           }
-        } else { this.app.setStatus('Spotify 回應錯誤 ' + r.status); next = 4000; }
+        } else { this.status('Spotify 回應錯誤 ' + r.status); next = 4000; }
       }
     } catch (e) {
       console.warn('[spotify]', e);
       if (e.message === 'NO_REFRESH' || e.message === 'REFRESH_FAILED') {
-        if (!this.token) this.app.onIdle('spotify-login'); else this.app.setStatus('Spotify 重新登入中…');
-      } else this.app.setStatus('連不到 Spotify，重試中…');
+        if (!this.token) this.idle('login'); else this.status('Spotify 重新登入中…');
+      } else this.status(e.code === 'TIMEOUT' ? 'Spotify 沒有回應，重試中…' : '連不到 Spotify，重試中…');
       next = 4000;
     }
-    if (document.hidden) next = Math.max(next, 4000);
-    if (this.active && id === this.loop) this.timer = setTimeout(() => this.poll(id), next);
+    if (document.hidden) next = Math.max(next, 2000);
+    if (live()) this.timer = setTimeout(() => this.poll(id, gen), next);
   }
 }
 function pickImage(imgs) {
@@ -905,7 +1188,11 @@ function parseVideoTitle(title, author) {
 }
 
 class YouTubeSource {
-  constructor(app) { this.app = app; this.player = null; this.ready = false; this.videoId = null; this.track = null; this.active = false; this.timer = 0; this.lastT = -1; this.lastPlaying = null; }
+  constructor(app) {
+    this.app = app; this.player = null; this.ready = false; this.videoId = null; this.track = null;
+    this.active = false; this.timer = 0; this.lastT = -1; this.lastPlaying = null; this.n = 0;
+    this.canSeek = true; this.hasVolume = true;
+  }
   static parseId(input) {
     const s = String(input || '').trim();
     if (/^[\w-]{11}$/.test(s)) return s;
@@ -934,12 +1221,13 @@ class YouTubeSource {
     return this.apiP;
   }
   async play(input) {
+    if (!Env.can('youtube')) { toast('直接打開 HTML 檔時，YouTube 播放器不能用。請改用線上版，或用 start.bat 開啟。', 0); return false; }
     const id = YouTubeSource.parseId(input);
     if (!id) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲網址', 5000); return false; }
     this.videoId = id;
     Store.set('yt.last', String(input).trim());
     this.track = null;
-    try { await this.loadApi(); } catch (e) { toast('載入不了 YouTube 播放器，檢查網路後再試', 6000); return false; }
+    try { await this.loadApi(); } catch (e) { toast('載入不了 YouTube 播放器，檢查網路後再試', 0); return false; }
     this.app.showYtCard(true);
     if (this.player && this.ready) this.player.loadVideoById(id);
     else if (!this.player) {
@@ -947,7 +1235,11 @@ class YouTubeSource {
         width: 356, height: 200, videoId: id,
         playerVars: { autoplay: 1, playsinline: 1, rel: 0, origin: location.origin },
         events: {
-          onReady: () => { this.ready = true; try { this.player.playVideo(); } catch (e) { /* ignore */ } },
+          onReady: () => {
+            this.ready = true;
+            this.setVolume(Store.get('yt.vol', 100));
+            try { this.player.playVideo(); } catch (e) { /* ignore */ }
+          },
           onError: e => this.onErr(e),
         },
       });
@@ -956,18 +1248,17 @@ class YouTubeSource {
   }
   onErr(e) {
     const c = e && e.data;
-    const msg = c === 2 ? '這個影片網址不正確'
-      : c === 5 ? '播放器出錯，換一首試試'
-      : c === 100 ? '找不到這個影片，可能被刪除或設成私人'
-      : c === 101 || c === 150 ? '版權方不允許在其他網站播放這支影片，換一個版本試試（例如 YouTube Music 的歌曲連結）'
-      : c === 153 ? '播放器拿不到網址來源，請用 start.bat 開啟程式'
-      : '播放失敗（錯誤 ' + c + '）';
-    toast(msg, 8000);
+    if (c === 2) toast('這個影片網址不正確', 6000);
+    else if (c === 5) toast('播放器出錯，換一首試試', 6000);
+    else if (c === 100) toast('找不到這個影片，可能被刪除或設成私人', 0);
+    else if (c === 101 || c === 150) toast('版權方不允許在其他網站播放這支影片。換一個版本試試，例如 YouTube Music 的歌曲連結。', 0);
+    else if (c === 153) toast('播放器拿不到網址來源。請改用線上版，或用 start.bat 開啟程式。', 0);
+    else toast('播放失敗（錯誤 ' + c + '）', 0);
   }
   start() {
     this.active = true;
     if (this.player) this.app.showYtCard(true);
-    if (!this.videoId) this.app.onIdle('youtube-empty');
+    if (!this.videoId) this.app.onIdle({ key: 'youtube-empty', title: '貼上一首歌的連結', hint: '點上方的 YouTube 開始', status: 'YouTube 待命' });
     this.tick();
   }
   stop() {
@@ -976,6 +1267,8 @@ class YouTubeSource {
     try { if (this.player && this.ready) this.player.pauseVideo(); } catch (e) { /* ignore */ }
     this.app.showYtCard(false);
   }
+  /* the player's getters read state it already received, so polling them is cheap;
+     title and length only change with the video, so read those once a second */
   tick() {
     if (!this.active) return;
     const p = this.player;
@@ -984,18 +1277,20 @@ class YouTubeSource {
         const st = p.getPlayerState();
         const t = p.getCurrentTime() || 0;
         const playing = st === 1;
-        const d = p.getVideoData ? p.getVideoData() : null;
-        const dur = p.getDuration ? p.getDuration() : 0;
-        if (d && d.video_id && d.title && dur > 0 && (!this.track || this.track.vid !== d.video_id)) {
-          const meta = parseVideoTitle(d.title, d.author);
-          this.track = {
-            key: 'yt:' + d.video_id, vid: d.video_id,
-            title: meta.title || d.title, artist: meta.artist || d.author || '', album: '',
-            duration: dur,
-            art: ['https://i.ytimg.com/vi/' + d.video_id + '/maxresdefault.jpg', 'https://i.ytimg.com/vi/' + d.video_id + '/hqdefault.jpg'],
-            source: 'youtube',
-          };
-          this.lastT = -1;
+        if (!this.track || this.n++ % 10 === 0) {
+          const d = p.getVideoData ? p.getVideoData() : null;
+          const dur = p.getDuration ? p.getDuration() : 0;
+          if (d && d.video_id && d.title && dur > 0 && (!this.track || this.track.vid !== d.video_id)) {
+            const meta = parseVideoTitle(d.title, d.author);
+            this.track = {
+              key: 'yt:' + d.video_id, vid: d.video_id,
+              title: meta.title || d.title, artist: meta.artist || d.author || '', album: '',
+              duration: dur,
+              art: ['https://i.ytimg.com/vi/' + d.video_id + '/maxresdefault.jpg', 'https://i.ytimg.com/vi/' + d.video_id + '/hqdefault.jpg'],
+              source: 'youtube',
+            };
+            this.lastT = -1;
+          }
         }
         if (this.track && (t !== this.lastT || playing !== this.lastPlaying)) {
           this.app.onPlayback(this.track, t, playing, performance.now());
@@ -1009,9 +1304,16 @@ class YouTubeSource {
     if (!this.player || !this.ready) return;
     if (this.player.getPlayerState() === 1) this.player.pauseVideo(); else this.player.playVideo();
   }
-  seek(d) {
+  seekTo(t) {
     if (!this.player || !this.ready) return;
-    this.player.seekTo(Math.max(0, (this.player.getCurrentTime() || 0) + d), true);
+    const d = this.player.getDuration ? this.player.getDuration() : 0;
+    this.player.seekTo(clamp(t, 0, d ? d - 0.5 : t), true);
+  }
+  seek(d) { if (this.player && this.ready) this.seekTo((this.player.getCurrentTime() || 0) + d); }
+  setVolume(v) {
+    v = clamp(Math.round(v), 0, 100);
+    Store.set('yt.vol', v);
+    try { if (this.player && this.ready && this.player.setVolume) { this.player.setVolume(v); if (v > 0 && this.player.unMute) this.player.unMute(); } } catch (e) { /* ignore */ }
   }
 }
 
@@ -1034,7 +1336,7 @@ const DEMO_LRC = `[ti:夜行列車]
 [00:53.80]`;
 
 class DemoSource {
-  constructor(app) { this.app = app; this.active = false; this.pos = 0; this.playing = true; this.track = null; this.timer = 0; this.last = 0; }
+  constructor(app) { this.app = app; this.active = false; this.pos = 0; this.playing = true; this.track = null; this.timer = 0; this.last = 0; this.canSeek = true; this.hasVolume = false; }
   makeTrack() {
     if (this.track) return this.track;
     const { c, ctx } = makeCanvas(640, 640);
@@ -1068,6 +1370,7 @@ class DemoSource {
   }
   togglePlay() { this.playing = !this.playing; this.app.onPlayback(this.track, this.pos, this.playing, performance.now()); }
   seek(d) { this.jump(this.pos + d); }
+  seekTo(t) { this.jump(t); }
   jump(t) { this.pos = clamp(t, 0, this.track.duration - 0.05); this.last = performance.now(); this.app.onPlayback(this.track, this.pos, this.playing, this.last); }
 }
 
@@ -1075,14 +1378,31 @@ class DemoSource {
 const FONT_SANS = '"Outfit", "Noto Sans TC", "Noto Sans SC", "Noto Sans CJK TC", "Microsoft JhengHei", "PingFang TC", "Heiti TC", sans-serif';
 const FONT_SERIF = '"Fraunces", "Noto Serif TC", "Noto Serif SC", "Noto Serif CJK TC", "PMingLiU", "Songti TC", serif';
 
+/* every visual difference between styles lives here, so a new style is one new entry */
 const THEMES = {
-  flow:   { label: '流光', kind: 'sans',  weight: 800, inA: [0.27, 0.36], unA: 0.40, glow: 0.7,  soft: 0.5, dim: 0.30, vignette: 0.5,  grain: 0.055, sat: 1.55, blur: 7, ink: [255, 255, 255] },
-  serif:  { label: '明體', kind: 'serif', weight: 600, inA: [0.20, 0.27], unA: 0.30, glow: 0.22, soft: 2.4, dim: 0.42, vignette: 0.62, grain: 0.09,  sat: 1.12, blur: 9, ink: [255, 244, 228] },
-  cinema: { label: '電影', kind: 'sans',  weight: 500, inA: [0.3, 0.3],   unA: 1,    glow: 0,    soft: 0,   dim: 0.34, vignette: 0.75, grain: 0.12,  sat: 1.05, blur: 4, ink: [255, 255, 255] },
+  flow: {
+    label: '流光', desc: '封面顏色流動，唱到哪亮到哪', mode: 'scroll', font: 'sans', weight: 800,
+    size: [60, 68], gapK: 0.62, rowK: 1.2, align: null, inactiveScale: 0.955,
+    inA: [0.27, 0.36], unA: 0.40, glow: 0.7, softBehind: 0.45,
+    dim: 0.30, vignette: 0.5, grain: 0.055, grainFps: 0, sat: 1.55, blur: 7, kenBurns: false, credit: false, ink: [255, 255, 255],
+  },
+  serif: {
+    label: '明體', desc: '襯線字置中，比較安靜', mode: 'scroll', font: 'serif', weight: 600,
+    size: [54, 62], gapK: 0.95, rowK: 1.4, align: 'center', inactiveScale: 0.97,
+    inA: [0.20, 0.27], unA: 0.30, glow: 0.22, softBehind: 1.4,
+    dim: 0.42, vignette: 0.62, grain: 0.09, grainFps: 0, sat: 1.12, blur: 9, kenBurns: false, credit: false, ink: [255, 244, 228],
+  },
+  cinema: {
+    label: '電影', desc: '上下黑邊，一次一行字幕', mode: 'subtitle', font: 'sans', weight: 500,
+    size: [46, 56], gapK: 0.62, rowK: 1.32, align: 'center', inactiveScale: 1,
+    inA: [0.3, 0.3], unA: 1, glow: 0, softBehind: 0,
+    dim: 0.34, vignette: 0.75, grain: 0.12, grainFps: 24, sat: 1.05, blur: 4, kenBurns: true, credit: true, ink: [255, 255, 255],
+  },
 };
 const THEME_ORDER = ['flow', 'serif', 'cinema'];
+const famOf = T => (T.font === 'serif' ? FONT_SERIF : FONT_SANS);
 
-const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
+const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
 const CLOSE_PUNCT = /^[，。！？、；：）」』】》〉…,.!?;:)\]’”]/;
 
 function tokenize(text) {
@@ -1131,17 +1451,18 @@ class Renderer {
     this.c = canvas;
     this.x = canvas.getContext('2d', { alpha: false });
     this.theme = 'flow';
-    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true };
+    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true };
     this.track = null;
-    this.artImg = null; this.artSmall = null; this.artCrop = null; this.artAlpha = 0; this.artTok = 0;
+    this.artImg = null; this.artSmall = null; this.artMid = null; this.artCrop = null; this.artAlpha = 0; this.artTok = 0;
     this.palette = Palette.fromString('Lyrics Studio');
     this.lyr = { status: 'idle', entries: [], plain: [], note: '', hint: '' };
-    this.anim = 0; this.artScale = 1; this.bgFade = 1; this.prevBg = null;
+    this.anim = 0; this.artScale = 1; this.bgFade = 1; this.prevBg = null; this.bgAcc = 0; this.bgDirty = true;
     this.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.perfLow = false; this.ft = 1 / 60; this.slowFor = 0; this.warm = 0;
-    this.grain = this.makeGrain(128); this.grainPat = null; this.grainTick = 0; this.grainOff = [0, 0];
+    this.grain = this.makeGrain(128); this.grainPat = null; this.grainCtx = null;
     this.cine = { cur: -2, prev: -2, t0: 0 };
-    this.snap = true;
+    this.mcache = new Map(); this.fontSeen = new Map();
+    this.snap = true; this.curLine = '';
     this.resize(canvas.width, canvas.height);
   }
   get T() { return THEMES[this.theme]; }
@@ -1160,15 +1481,18 @@ class Renderer {
     const land = W >= H;
     const bw = land ? 160 : Math.round(160 * W / H), bh = land ? Math.round(160 * H / W) : 160;
     this.bgS = makeCanvas(bw, bh); this.bgB = makeCanvas(bw, bh);
-    this.prevBg = null; this.bgFade = 1;
+    this.bgFull = makeCanvas(W, H); this.grainCtx = null;
+    this.prevBg = null; this.bgFade = 1; this.bgDirty = true;
     this.layoutDirty = true; this.snap = true;
   }
   setTheme(name) {
     if (!THEMES[name]) name = 'flow';
-    this.theme = name; this.layoutDirty = true; this.snap = true; this.cine.cur = -2;
+    if (name === this.theme && !this.layoutDirty) return;
+    this.theme = name; this.layoutDirty = true; this.snap = true; this.bgDirty = true; this.cine.cur = -2;
     this.preloadFonts();
   }
   setOpts(o) { Object.assign(this.opts, o); this.layoutDirty = true; this.snap = true; }
+  fontsChanged() { this.mcache.clear(); this.layoutDirty = true; }
 
   /* ---------- track + art ---------- */
   setTrack(track) {
@@ -1200,7 +1524,7 @@ class Renderer {
     if (!this.bgB) return;
     const { c, ctx } = makeCanvas(this.bgB.c.width, this.bgB.c.height);
     ctx.drawImage(this.bgB.c, 0, 0);
-    this.prevBg = c; this.bgFade = 0;
+    this.prevBg = c; this.bgFade = 0; this.bgDirty = true;
   }
   useArt(img) {
     const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
@@ -1224,6 +1548,7 @@ class Renderer {
     const a = this.palette.avg || [80, 80, 80];
     const lum = (0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]) / 255;
     this.dimExtra = clamp((lum - 0.26) * 0.85, 0, 0.32); // bright covers get a darker backdrop so text keeps contrast
+    this.bgDirty = true;
     if (this.onPalette) this.onPalette(this.palette);
   }
 
@@ -1232,31 +1557,38 @@ class Renderer {
     this.layoutDirty = true; this.snap = true; this.cine.cur = -2; this.plainY = null;
     this.preloadFonts();
   }
-  /* web fonts load per character range; ask for the ones these lyrics need, then re-measure */
+  /* web fonts load per character range: ask only for characters not requested before, then re-measure */
   preloadFonts() {
     if (!document.fonts || !document.fonts.load) return;
-    const T = this.T, fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const T = this.T, fam = famOf(T);
     const txt = (this.lyr.entries || []).map(e => (e.text || '') + (e.sub || '')).join('') + (this.lyr.plain || []).join('') +
       (this.track ? this.track.title + this.track.artist : '') + '正在找歌詞找不到同步純音樂等待播放0123456789:';
-    const sample = Array.from(new Set(Array.from(txt))).join('').slice(0, 3000);
-    Promise.all([
-      document.fonts.load(`${T.weight} 48px ${fam}`, sample),
-      document.fonts.load(`700 48px ${fam}`, sample),
-      document.fonts.load(`500 48px ${FONT_SANS}`, sample),
-    ]).then(() => { this.layoutDirty = true; }).catch(() => {});
+    const chars = Array.from(new Set(Array.from(txt)));
+    const jobs = [];
+    for (const f of [`${T.weight} 48px ${fam}`, `700 48px ${fam}`, `500 48px ${FONT_SANS}`]) {
+      let seen = this.fontSeen.get(f);
+      if (!seen) this.fontSeen.set(f, (seen = new Set()));
+      const fresh = chars.filter(c => !seen.has(c));
+      if (!fresh.length) continue;
+      fresh.forEach(c => seen.add(c));
+      jobs.push(document.fonts.load(f, fresh.join('').slice(0, 3000)));
+    }
+    if (jobs.length) Promise.all(jobs).then(() => this.fontsChanged()).catch(() => {});
   }
 
   /* ---------- geometry ---------- */
   geom() {
-    const { W, H } = this;
+    const T = this.T, { W, H } = this;
     const ar = W / H, land = ar >= 1.25, u = Math.min(W, H) / 1080, s = this.opts.scale || 1;
     const g = { W, H, u, land };
-    if (this.theme === 'cinema') {
+    g.font = T.size[land ? 0 : 1] * u * s;
+    g.gap = g.font * T.gapK;
+    g.rowH = g.font * T.rowK;
+    if (T.mode === 'subtitle') {
       g.bar = land ? Math.max(0, (H - W / 2.39) / 2) : 0;
-      g.font = (land ? 46 : 56) * u * s;
       g.subY = land ? H - g.bar - 120 * u : H * 0.74;
       g.maxW = land ? W * 0.7 : W * 0.84;
-      g.cx = W / 2;
+      g.cx = W / 2; g.lw = g.maxW; g.lx = (W - g.maxW) / 2; g.align = 'center';
       return g;
     }
     const info = this.opts.showInfo;
@@ -1277,28 +1609,34 @@ class Renderer {
       g.bottom = H * 0.95;
       g.anchor = g.top + (g.bottom - g.top) * (info ? 0.3 : 0.36);
     }
-    const base = this.theme === 'serif' ? (land ? 54 : 62) : (land ? 60 : 68);
-    g.font = base * u * s;
-    g.gap = g.font * (this.theme === 'serif' ? 0.95 : 0.62);
-    g.rowH = g.font * (this.theme === 'serif' ? 1.4 : 1.2);
-    g.align = this.opts.align === 'auto' ? (this.theme === 'serif' || !land ? 'center' : 'left') : this.opts.align;
+    g.align = this.opts.align === 'auto' ? (T.align || (land ? 'left' : 'center')) : this.opts.align;
     g.cx = g.lx + g.lw / 2;
     return g;
   }
-  mainFont(px) { const T = this.T; return `${T.weight} ${px.toFixed(1)}px ${T.kind === 'serif' ? FONT_SERIF : FONT_SANS}`; }
-  subFont(px) { return `500 ${px.toFixed(1)}px ${this.T.kind === 'serif' ? FONT_SERIF : FONT_SANS}`; }
+  mainFont(px) { const T = this.T; return `${T.weight} ${px.toFixed(1)}px ${famOf(T)}`; }
+  subFont(px) { return `500 ${px.toFixed(1)}px ${famOf(this.T)}`; }
 
+  /* measureText is the slow part of layout; widths only change when the font does */
+  measure(s) {
+    const key = this.x.font + '\u0001' + s;
+    let w = this.mcache.get(key);
+    if (w === undefined) {
+      w = this.x.measureText(s).width;
+      if (this.mcache.size > 40000) this.mcache.clear();
+      this.mcache.set(key, w);
+    }
+    return w;
+  }
   wrap(text, maxW) {
-    const x = this.x;
     const toks = tokenize(text);
     const run = lim => {
       const rows = [];
       let cur = '', w = 0;
       for (let tk of toks) {
-        const tw = x.measureText(tk).width;
+        const tw = this.measure(tk);
         if (tw > lim && tk.trim().length > 1) { // a single word wider than the line: break it
           for (const ch of Array.from(tk)) {
-            const cw = x.measureText(ch).width;
+            const cw = this.measure(ch);
             if (cur.trim() && w + cw > lim) { rows.push(cur); cur = ''; w = 0; }
             cur += ch; w += cw;
           }
@@ -1307,7 +1645,7 @@ class Renderer {
         if (cur.trim() && w + tw > lim && !CLOSE_PUNCT.test(tk)) {
           rows.push(cur);
           tk = tk.replace(/^\s+/, '');
-          cur = tk; w = x.measureText(tk).width;
+          cur = tk; w = this.measure(tk);
         } else { cur += tk; w += tw; }
       }
       if (cur.trim()) rows.push(cur);
@@ -1315,7 +1653,7 @@ class Renderer {
     };
     let rows = run(maxW);
     if (rows.length > 1) { // balance rows so the last one isn't a lonely word
-      const total = rows.reduce((a, r) => a + x.measureText(r.trim()).width, 0);
+      const total = rows.reduce((a, r) => a + this.measure(r.trim()), 0);
       let lim = (total / rows.length) * 1.06;
       for (let k = 0; k < 8 && lim < maxW; k++) {
         const alt = run(lim);
@@ -1323,14 +1661,14 @@ class Renderer {
         lim *= 1.05;
       }
     }
-    return rows.map(r => { const t = r.trim(); return { text: t, chars: Array.from(t), w: x.measureText(t).width }; });
+    return rows.map(r => { const t = r.trim(); return { text: t, chars: Array.from(t), w: this.measure(t) }; });
   }
 
   layout() {
     const g = (this.g = this.geom());
     const x = this.x;
     const E = this.lyr.entries || [];
-    if (this.theme !== 'cinema') {
+    if (this.T.mode === 'scroll') {
       const subPx = g.font * 0.5;
       for (const e of E) {
         const prev = e.L || {};
@@ -1365,12 +1703,11 @@ class Renderer {
     x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none';
     x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetX = 0; x.shadowOffsetY = 0;
     this.drawBackground(dt);
-    if (this.theme === 'cinema') this.drawCinema(songT, lyricT, dt);
+    if (this.T.mode === 'subtitle') this.drawCinema(songT, lyricT, dt);
     else {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
       this.drawLyrics(lyricT, dt);
     }
-    this.drawGrain(dt);
     this.monitor(dt);
   }
   monitor(dt) {
@@ -1383,8 +1720,20 @@ class Renderer {
     } else this.slowFor = Math.max(0, this.slowFor - dt);
   }
 
+  /* the backdrop moves slowly, so it is rebuilt off-screen ~30 times a second (24 for film grain)
+     and each frame only copies it */
   drawBackground(dt) {
-    const x = this.x, W = this.W, H = this.H, T = this.T, P = this.palette;
+    const T = this.T;
+    this.bgAcc += dt;
+    const step = 1 / (T.grainFps || 30);
+    if (this.bgDirty || this.bgAcc >= step) {
+      this.renderBackground(Math.min(this.bgAcc, 0.25));
+      this.bgAcc = 0; this.bgDirty = false;
+    }
+    this.x.drawImage(this.bgFull.c, 0, 0);
+  }
+  renderBackground(dt) {
+    const x = this.bgFull.ctx, W = this.W, H = this.H, T = this.T, P = this.palette;
     const S = this.bgS, B = this.bgB, sw = S.c.width, sh = S.c.height, sx = S.ctx;
     const tt = this.anim * (this.reduced ? 0.2 : 1);
     sx.globalAlpha = 1; sx.globalCompositeOperation = 'source-over';
@@ -1421,6 +1770,7 @@ class Renderer {
     bx.drawImage(S.c, -m, -m, sw + 2 * m, sh + 2 * m);
     bx.filter = 'none';
 
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
     x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
     x.drawImage(B.c, 0, 0, W, H);
     if (this.prevBg && this.bgFade < 1) {
@@ -1430,21 +1780,21 @@ class Renderer {
       x.globalAlpha = 1;
       if (this.bgFade >= 1) this.prevBg = null;
     }
-    if (this.theme === 'cinema') { // the cover itself, slowly drifting like a film still
+    if (T.kenBurns) { // the cover itself, slowly drifting like a film still
       if (this.prevArtMid) {
         this.prevArtA -= dt / 1.1;
-        if (this.prevArtA <= 0) this.prevArtMid = null; else this.kenBurns(this.prevArtMid, this.prevArtA);
+        if (this.prevArtA <= 0) this.prevArtMid = null; else this.kenBurns(x, this.prevArtMid, this.prevArtA);
       }
-      if (this.artMid && this.artAlpha > 0.01) this.kenBurns(this.artMid, this.artAlpha);
+      if (this.artMid && this.artAlpha > 0.01) this.kenBurns(x, this.artMid, this.artAlpha);
     }
     x.fillStyle = `rgba(0,0,0,${clamp(T.dim + (this.dimExtra || 0), 0, 0.8)})`; x.fillRect(0, 0, W, H);
     const vg = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(0,0,0,${T.vignette})`);
     x.fillStyle = vg; x.fillRect(0, 0, W, H);
+    this.grainOn(x);
   }
-
-  kenBurns(img, alpha) {
-    const x = this.x, W = this.W, H = this.H;
+  kenBurns(x, img, alpha) {
+    const W = this.W, H = this.H;
     const tt = this.anim * (this.reduced ? 0.15 : 1);
     const zoom = 1.12 + 0.05 * Math.sin(tt * 0.045);
     const s = Math.max(W, H) * zoom;
@@ -1455,20 +1805,16 @@ class Renderer {
     x.drawImage(img, cx - s / 2, cy - s / 2, s, s);
     x.restore();
   }
-
-  drawGrain(dt) {
-    const x = this.x, T = this.T;
+  grainOn(x) {
+    const T = this.T;
     if (!T.grain) return;
-    if (!this.grainPat) this.grainPat = x.createPattern(this.grain, 'repeat');
-    if (this.theme === 'cinema' && !this.reduced) { // film grain refreshes at ~24 fps
-      this.grainTick += dt;
-      if (this.grainTick > 1 / 24) { this.grainTick = 0; this.grainOff = [(Math.random() * 128) | 0, (Math.random() * 128) | 0]; }
-    } else this.grainOff = [0, 0];
+    if (this.grainCtx !== x) { this.grainPat = x.createPattern(this.grain, 'repeat'); this.grainCtx = x; }
+    const ox = T.grainFps && !this.reduced ? (Math.random() * 128) | 0 : 0, oy = T.grainFps && !this.reduced ? (Math.random() * 128) | 0 : 0;
     x.save();
     x.globalAlpha = T.grain; x.globalCompositeOperation = 'overlay';
-    x.translate(-this.grainOff[0], -this.grainOff[1]);
+    x.translate(-ox, -oy);
     x.fillStyle = this.grainPat;
-    x.fillRect(this.grainOff[0], this.grainOff[1], this.W, this.H);
+    x.fillRect(ox, oy, this.W, this.H);
     x.restore();
   }
 
@@ -1504,7 +1850,7 @@ class Renderer {
     x.restore();
     if (!tr) return;
 
-    const fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const fam = famOf(T);
     const dur = tr.duration || 0, pos = clamp(songT, 0, dur || Math.max(0, songT));
     x.save();
     x.textAlign = 'left'; x.textBaseline = 'alphabetic';
@@ -1539,10 +1885,11 @@ class Renderer {
 
   /* ---------- scrolling lyrics (流光 / 明體) ---------- */
   drawLyrics(t, dt) {
-    const g = this.g, E = this.lyr.entries;
-    if (this.lyr.status !== 'synced' || !E.length) { this.drawLyricState(t, dt); return; }
+    const g = this.g, E = this.lyr.entries, T = this.T;
+    if (this.lyr.status !== 'synced' || !E.length) { this.curLine = ''; this.drawLyricState(t, dt); return; }
     let ai = LRC.activeIndex(E, t);
     if (ai > 0 && E[ai].type === 'gap' && !E[ai].show) ai--; // short breath: keep the last line lit
+    this.curLine = ai >= 0 && E[ai].type === 'line' ? E[ai].text : '';
     const focus = Math.max(0, ai);
     const snap = this.snap; this.snap = false;
     for (let i = 0; i < E.length; i++) {
@@ -1566,7 +1913,7 @@ class Renderer {
       L.y = L.y == null || snap ? target : approach(L.y, target, dt, k0 / (1 + d * 0.11)); // farther lines trail a little
       const act = i === ai ? 1 : 0;
       L.lv = snap ? act : approach(L.lv || 0, act, dt, act ? 7 : 4.5);
-      const ts = act ? 1 : this.theme === 'serif' ? 0.97 : 0.955;
+      const ts = act ? 1 : T.inactiveScale;
       L.s = L.s == null || snap ? ts : approach(L.s, ts, dt, 6);
     }
     const fadeLen = (g.bottom - g.top) * 0.16;
@@ -1583,13 +1930,24 @@ class Renderer {
       this.drawLine(e, L, i, ai, t, fade, blur);
     }
   }
+  /* which lyric line is under a point on the canvas (for click-to-jump) */
+  hitLine(px, py) {
+    if (this.T.mode !== 'scroll' || this.lyr.status !== 'synced' || !this.g) return -1;
+    const g = this.g, E = this.lyr.entries;
+    if (px < g.lx - g.font * 0.5 || px > g.lx + g.lw + g.font * 0.5 || py < g.top || py > g.bottom) return -1;
+    for (let i = 0; i < E.length; i++) {
+      const e = E[i], L = e.L;
+      if (!L || e.type !== 'line' || L.y == null) continue;
+      if (py >= L.y - g.gap / 2 && py <= L.y + L.h + g.gap / 2) return i;
+    }
+    return -1;
+  }
 
   charX(r, n) {
-    const x = this.x;
-    if (!r.pre || r.preFont !== x.font) {
+    if (!r.pre || r.preFont !== this.x.font) {
       r.pre = [0];
-      for (let k = 1; k <= r.chars.length; k++) r.pre.push(x.measureText(r.chars.slice(0, k).join('')).width);
-      r.preFont = x.font;
+      for (let k = 1; k <= r.chars.length; k++) r.pre.push(this.measure(r.chars.slice(0, k).join('')));
+      r.preFont = this.x.font;
     }
     const k = Math.floor(n), f = n - k;
     if (k >= r.chars.length) return r.pre[r.chars.length];
@@ -1616,7 +1974,8 @@ class Renderer {
     const y0 = L.y;
     const karaoke = this.opts.karaoke && lv > 0.002;
     const P = karaoke ? this.progressChars(e, t) : 0;
-    const soft = g.font * T.soft;
+    /* the lit edge eases in behind the sung position and never reaches ahead of it */
+    const behind = g.font * T.softBehind, ahead = g.font * 0.1;
     x.save();
     x.globalAlpha = alpha;
     x.translate(ox, y0); x.scale(L.s, L.s); x.translate(-ox, -y0);
@@ -1626,16 +1985,16 @@ class Renderer {
     for (const r of L.rows) {
       const rx = g.align === 'center' ? g.cx - r.w / 2 : g.lx;
       const n = karaoke ? rowFill(r, P) : 0;
-      let fx = null; // x where the fill fades into the unsung part
-      if (karaoke && n > 0 && n < r.chars.length) fx = rx - soft + (this.charX(r, n) / Math.max(1, r.w)) * (r.w + 2 * soft);
       const lit = !karaoke ? 1 : n >= r.chars.length ? 1 : n <= 0 ? 0 : -1; // -1 = partly sung
+      let g0 = 0, g1 = 0;
+      if (lit === -1) { const px = rx + this.charX(r, n); g0 = px - behind; g1 = px + ahead; }
       if (T.glow && lv > 0.02 && lit !== 0) {
         x.save();
         x.filter = `blur(${(16 * u).toFixed(1)}px)`;
         x.globalAlpha = alpha * T.glow * lv;
         if (lit === 1) x.fillStyle = rgba(this.palette.accent, 1);
         else {
-          const gg = x.createLinearGradient(fx - soft, 0, fx + soft, 0);
+          const gg = x.createLinearGradient(g0, 0, g1, 0);
           gg.addColorStop(0, rgba(this.palette.accent, 1)); gg.addColorStop(1, rgba(this.palette.accent, 0));
           x.fillStyle = gg;
         }
@@ -1647,7 +2006,7 @@ class Renderer {
       else if (lit === 1) x.fillStyle = rgba(col, fiA);
       else if (lit === 0) x.fillStyle = rgba(col, unA);
       else {
-        const gr = x.createLinearGradient(fx - soft, 0, fx + soft, 0);
+        const gr = x.createLinearGradient(g0, 0, g1, 0);
         gr.addColorStop(0, rgba(col, fiA)); gr.addColorStop(1, rgba(col, unA));
         x.fillStyle = gr;
       }
@@ -1685,11 +2044,11 @@ class Renderer {
   }
 
   stateText() {
-    const st = this.lyr.status;
-    switch (st) {
+    switch (this.lyr.status) {
       case 'loading': return ['正在找歌詞', ''];
       case 'notfound': return ['找不到同步歌詞', '按 L 手動搜尋，或把 LRC 檔拖進視窗'];
       case 'instrumental': return ['純音樂', '這首歌沒有歌詞'];
+      case 'off': return ['這首不顯示歌詞', '按 L 可以改回自動配對'];
       case 'error': return ['歌詞載入失敗', this.lyr.note || '按 L 重新搜尋'];
       default: return [this.lyr.note || '等待播放', this.lyr.hint || ''];
     }
@@ -1698,7 +2057,7 @@ class Renderer {
     if (this.lyr.status === 'plain') { this.drawPlain(t, dt); return; }
     const x = this.x, g = this.g, T = this.T;
     const [title, hint] = this.stateText();
-    const fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const fam = famOf(T);
     const cx = g.align === 'center' ? g.cx : g.lx;
     const pulse = this.lyr.status === 'loading' ? 0.55 + 0.35 * Math.sin(this.anim * 3) : 0.92;
     x.save();
@@ -1749,9 +2108,9 @@ class Renderer {
     return e.C;
   }
   drawCinema(songT, t, dt) {
-    const x = this.x, g = this.g, W = this.W, H = this.H, u = g.u, tr = this.track;
+    const x = this.x, g = this.g, W = this.W, H = this.H, u = g.u, tr = this.track, T = this.T;
     if (g.bar > 0) { x.fillStyle = '#000'; x.fillRect(0, 0, W, Math.ceil(g.bar)); x.fillRect(0, Math.floor(H - g.bar), W, Math.ceil(g.bar)); }
-    if (tr) { // opening credit for the first seconds of the song
+    if (tr && T.credit && this.opts.credit !== false) { // opening credit for the first seconds of the song
       const ca = clamp((songT - 0.6) / 1.4, 0, 1) * clamp((8 - songT) / 1.6, 0, 1);
       if (ca > 0.005) {
         x.save();
@@ -1767,6 +2126,7 @@ class Renderer {
     }
     const st = this.lyr.status, E = this.lyr.entries;
     if (st !== 'synced' || !E.length) {
+      this.curLine = '';
       const msg = st === 'plain' ? '這首只有未同步的歌詞，換成流光或明體風格來看' : this.stateText()[0];
       x.save();
       x.font = `500 ${(g.font * 0.62).toFixed(1)}px ${FONT_SANS}`; x.textAlign = 'center'; x.textBaseline = 'middle';
@@ -1777,6 +2137,7 @@ class Renderer {
     }
     let ai = LRC.activeIndex(E, t);
     if (ai >= 0 && E[ai].type === 'gap') ai = E[ai].show ? -1 : ai - 1;
+    this.curLine = ai >= 0 && E[ai].type === 'line' ? E[ai].text : '';
     const C = this.cine;
     if (ai !== C.cur) { C.prev = C.cur; C.cur = ai; C.t0 = this.anim; }
     const ef = easeOut(clamp((this.anim - C.t0) / 0.5, 0, 1));
@@ -1791,7 +2152,7 @@ class Renderer {
       const total = c.rows.length * rh + (c.sub.length ? fs * 0.12 + c.sub.length * srh : 0);
       let y = g.subY - total / 2 + rh / 2 + dy;
       x.globalAlpha = a;
-      x.font = `${this.T.weight} ${fs.toFixed(1)}px ${FONT_SANS}`; x.fillStyle = '#fff';
+      x.font = `${T.weight} ${fs.toFixed(1)}px ${FONT_SANS}`; x.fillStyle = '#fff';
       for (const r of c.rows) { x.fillText(r.text, g.cx - r.w / 2, y); y += rh; }
       if (c.sub.length) {
         y += fs * 0.12 - rh / 2 + srh / 2;
@@ -1805,21 +2166,35 @@ class Renderer {
   }
 }
 
-/* ---------- recorder: the canvas itself + optional shared audio / microphone ---------- */
+/* ---------- recorder: the canvas itself + optional shared audio / microphone ----------
+   states: idle → ready (permissions granted, countdown running) → recording ⇄ paused → idle
+   WebM arrives in 1 s chunks while recording. Chrome's MP4 writer hands everything over only at the end,
+   so for MP4 the size is estimated from the bitrate, and an empty file can only be caught after stopping. */
 class Recorder {
-  constructor(canvas) { this.canvas = canvas; this.mr = null; this.cleanup = []; this.t0 = 0; this.onstate = null; this.chunks = []; }
-  get active() { return !!this.mr && this.mr.state !== 'inactive'; }
-  static mime(withAudio) {
-    const list = withAudio
-      ? ['video/mp4;codecs=avc1.64002a,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2',
-        'video/mp4;codecs=avc1.64002a,opus', 'video/mp4;codecs=avc1,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-      : ['video/mp4;codecs=avc1.64002a', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.4d002a', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.mr = null; this.cleanup = []; this.chunks = []; this.bytes = 0;
+    this.state = 'idle';
+    this.onstate = null; this.onwarn = null;
+    this.maxBytes = 1.5 * 1024 * 1024 * 1024; // the recording lives in memory until saved
+    this.activeMs = 0; this.resumedAt = 0; this.warnedSize = false; this.bps = 0; this.streaming = false;
+  }
+  get active() { return this.state === 'recording' || this.state === 'paused'; }
+  get busy() { return this.state !== 'idle'; }
+  static mime(withAudio, format = 'auto') {
+    const mp4 = withAudio
+      ? ['video/mp4;codecs=avc1.64002a,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1.64002a,opus', 'video/mp4;codecs=avc1,opus']
+      : ['video/mp4;codecs=avc1.64002a', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.4d002a', 'video/mp4;codecs=avc1', 'video/mp4'];
+    const webm = withAudio ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'] : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const list = format === 'webm' ? webm : mp4.concat(webm);
     return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
   }
-  /* must be called straight from a click: getDisplayMedia needs the user gesture */
-  async start({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false } = {}) {
-    if (this.active) return;
+
+  /* step 1 — must be called straight from a click: getDisplayMedia needs the user gesture */
+  async prepare({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false, format = 'auto' } = {}) {
+    if (this.busy) throw Object.assign(new Error('BUSY'), { code: 'BUSY' });
     if (!window.MediaRecorder || !this.canvas.captureStream) throw Object.assign(new Error('UNSUPPORTED'), { code: 'UNSUPPORTED' });
+    this.state = 'ready';
     const streams = [];
     this.cleanup = [];
     try {
@@ -1832,7 +2207,7 @@ class Recorder {
         this.cleanup.push(() => ds.getTracks().forEach(t => t.stop()));
         const at = ds.getAudioTracks();
         if (!at.length) throw Object.assign(new Error('NO_SHARED_AUDIO'), { code: 'NO_SHARED_AUDIO' });
-        ds.getVideoTracks().forEach(t => t.addEventListener('ended', () => this.stop()));
+        ds.getVideoTracks().forEach(t => t.addEventListener('ended', () => this.stop('ended')));
         streams.push(new MediaStream(at));
       }
       if (audio === 'mic' || audio === 'both') {
@@ -1840,86 +2215,156 @@ class Recorder {
         this.cleanup.push(() => ms.getTracks().forEach(t => t.stop()));
         streams.push(ms);
       }
-    } catch (e) { this.release(); throw e; }
-
-    const v = this.canvas.captureStream(fps);
-    this.cleanup.push(() => v.getTracks().forEach(t => t.stop()));
-    let audioTracks = [];
-    if (streams.length === 1) audioTracks = streams[0].getAudioTracks();
-    else if (streams.length > 1) {
-      const ac = new AudioContext();
-      const dest = ac.createMediaStreamDestination();
-      for (const s of streams) ac.createMediaStreamSource(s).connect(dest);
-      this.cleanup.push(() => ac.close());
-      audioTracks = dest.stream.getAudioTracks();
+      const v = this.canvas.captureStream(fps);
+      this.cleanup.push(() => v.getTracks().forEach(t => t.stop()));
+      let audioTracks = [];
+      if (streams.length === 1) audioTracks = streams[0].getAudioTracks();
+      else if (streams.length > 1) {
+        const ac = new AudioContext();
+        const dest = ac.createMediaStreamDestination();
+        for (const s of streams) ac.createMediaStreamSource(s).connect(dest);
+        this.cleanup.push(() => ac.close());
+        audioTracks = dest.stream.getAudioTracks();
+      }
+      const mix = new MediaStream([...v.getVideoTracks(), ...audioTracks]);
+      const mime = Recorder.mime(audioTracks.length > 0, format);
+      const opts = { videoBitsPerSecond: bitrate };
+      if (mime) opts.mimeType = mime;
+      if (audioTracks.length) opts.audioBitsPerSecond = 192000;
+      const mr = new MediaRecorder(mix, opts);
+      this.bps = bitrate + (audioTracks.length ? 192000 : 0);
+      mr.ondataavailable = ev => this.onData(ev);
+      mr.onstop = () => this.finish();
+      mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 0); };
+      this.mr = mr;
+      this.mime = mr.mimeType || mime || 'video/webm';
+      this.streaming = /webm/i.test(this.mime);
+      this.hasAudio = audioTracks.length > 0;
+    } catch (e) {
+      this.mr = null; this.release(); this.state = 'idle';
+      throw e;
     }
-    const mix = new MediaStream([...v.getVideoTracks(), ...audioTracks]);
-    const mime = Recorder.mime(audioTracks.length > 0);
-    const opts = { videoBitsPerSecond: bitrate };
-    if (mime) opts.mimeType = mime;
-    if (audioTracks.length) opts.audioBitsPerSecond = 192000;
-    let mr;
-    try { mr = new MediaRecorder(mix, opts); } catch (e) { this.release(); throw e; }
-    this.mime = mr.mimeType || mime || 'video/webm';
-    this.chunks = [];
-    this.mr = mr;
-    mr.ondataavailable = ev => { if (ev.data && ev.data.size) this.chunks.push(ev.data); };
-    mr.onstop = () => this.finish();
-    mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 6000); };
-    mr.start(1000);
-    this.t0 = performance.now();
-    this.hasAudio = audioTracks.length > 0;
-    if (this.onstate) this.onstate(true);
   }
-  stop() { if (this.mr && this.mr.state !== 'inactive') this.mr.stop(); }
+  /* step 2 — after the countdown */
+  begin() {
+    if (this.state !== 'ready' || !this.mr) return;
+    this.chunks = []; this.bytes = 0; this.warnedSize = false; this.discard = false; this.stopReason = null;
+    this.activeMs = 0; this.resumedAt = performance.now();
+    this.mr.start(1000);
+    this.state = 'recording';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    if (this.streaming) this.healthTimer = setTimeout(() => this.checkHealth(), 4200);
+    this.sizeTimer = setInterval(() => this.checkSize(), 1000);
+    if (this.onstate) this.onstate('recording');
+  }
+  async start(opts) { await this.prepare(opts); this.begin(); } // no countdown
+  cancel() {
+    if (this.state !== 'ready') return;
+    this.mr = null; this.release(); this.state = 'idle';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    if (this.onstate) this.onstate('idle');
+  }
+  pause() {
+    if (this.state !== 'recording') return;
+    this.mr.pause();
+    this.activeMs += performance.now() - this.resumedAt;
+    this.state = 'paused';
+    if (this.onstate) this.onstate('paused');
+  }
+  resume() {
+    if (this.state !== 'paused') return;
+    this.mr.resume();
+    this.resumedAt = performance.now();
+    this.state = 'recording';
+    if (this.onstate) this.onstate('recording');
+  }
+  stop(reason = 'user') {
+    if (this.state === 'ready') { this.cancel(); return; }
+    if (!this.active || !this.mr || this.mr.state === 'inactive') return;
+    this.stopReason = this.stopReason || reason;
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    this.stoppedAt = this.elapsed();
+    this.mr.stop();
+  }
+  elapsed() {
+    if (this.state === 'recording') return (this.activeMs + performance.now() - this.resumedAt) / 1000;
+    if (this.state === 'paused') return this.activeMs / 1000;
+    return 0;
+  }
+  onData(ev) {
+    if (!ev.data || !ev.data.size) return;
+    this.chunks.push(ev.data);
+    this.bytes += ev.data.size;
+  }
+  /* bytes held so far: counted for WebM, estimated from the bitrate (an upper bound) for MP4 */
+  size() { return this.streaming ? this.bytes : Math.round(this.elapsed() * this.bps / 8); }
+  checkSize() {
+    if (!this.active) return;
+    const n = this.size();
+    if (!this.warnedSize && n > this.maxBytes * 0.85) { this.warnedSize = true; if (this.onwarn) this.onwarn('NEAR_LIMIT'); }
+    if (n >= this.maxBytes) this.stop('limit');
+  }
+  /* some encoder/driver combinations claim support but write next to nothing: with WebM this shows within seconds */
+  checkHealth() {
+    if (this.state === 'paused') { this.healthTimer = setTimeout(() => this.checkHealth(), 2000); return; }
+    if (this.state !== 'recording') return;
+    if (this.bytes < 16 * 1024) { this.discard = true; this.stop('empty'); if (this.onwarn) this.onwarn('EMPTY'); }
+  }
   release() { for (const f of this.cleanup.splice(0)) { try { f(); } catch (e) { /* ignore */ } } }
   finish() {
     const type = String(this.mime).split(';')[0] || 'video/webm';
-    const blob = new Blob(this.chunks, { type });
-    this.chunks = []; this.mr = null;
-    this.release();
-    if (this.onstate) this.onstate(false, blob, type);
+    let blob = this.discard ? null : new Blob(this.chunks, { type });
+    let reason = this.stopReason || 'user';
+    // an MP4 that comes back nearly empty after several seconds: same failure, found at the end
+    const empty = blob && blob.size < 16 * 1024 && (this.stoppedAt || 0) >= 3;
+    if (empty) { blob = null; reason = 'empty'; }
+    this.chunks = []; this.mr = null; this.discard = false; this.stopReason = null; this.stoppedAt = 0;
+    this.state = 'idle';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    this.release(); // stops the microphone / screen share so the browser's recording indicator goes away
+    if (this.onstate) this.onstate('idle', blob, type, reason);
+    if (empty && this.onwarn) this.onwarn('EMPTY');
   }
-  elapsed() { return this.active ? (performance.now() - this.t0) / 1000 : 0; }
 }
 
 /* ---------- app: wires sources → clock → lyrics → renderer, plus all the UI ---------- */
+const LIVE_URL = 'https://yappyap0427-png.github.io/lyrics-studio/';
 const LAYOUTS = ['fit', '16:9', '9:16', '1:1'];
-const LAYOUT_LABEL = { fit: '填滿', '16:9': '16:9', '9:16': '9:16', '1:1': '1:1' };
+const LAYOUT_INFO = {
+  fit: { label: '填滿', desc: '跟著視窗大小' },
+  '16:9': { label: '16:9', desc: '1920 × 1080 橫向' },
+  '9:16': { label: '9:16', desc: '1080 × 1920，TikTok、Reels、Shorts' },
+  '1:1': { label: '1:1', desc: '1440 × 1440 方形' },
+};
 const LAYOUT_SIZE = { '16:9': [1920, 1080], '9:16': [1080, 1920], '1:1': [1440, 1440] };
 const SOURCE_NAME = { spotify: 'Spotify', youtube: 'YouTube', demo: '示範' };
-const IDLE_TEXT = {
-  'spotify-login': ['還沒連接 Spotify', '點上方的 Spotify 完成設定'],
-  'spotify-nothing': ['Spotify 目前沒有在播放', '在任何裝置上播一首歌，這裡就會跟著顯示'],
-  'spotify-ad': ['廣告播放中', '廣告結束後會接回歌詞'],
-  'spotify-episode': ['正在播放 Podcast', 'Podcast 沒有同步歌詞'],
-  'spotify-denied': ['Spotify 拒絕存取', '開發模式需要 App 擁有者有 Premium'],
-  'youtube-empty': ['貼上一首歌的連結', '點上方的 YouTube 開始'],
-};
 
 const App = {
   init() {
     this.S = Object.assign({
       source: 'demo', theme: 'flow', layout: 'fit', offset: 0,
-      karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true,
-      recAudio: 'none', recFps: 60, recQuality: 'high', recAutoStop: true,
+      karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true,
+      recAudio: 'none', recFps: 60, recQuality: 'high', recAutoStop: true, recCountdown: true, recFormat: 'auto',
     }, Store.get('settings', {}));
     if (!LAYOUTS.includes(this.S.layout)) this.S.layout = 'fit';
-    const canvas = $('#stage');
+    if (!THEMES[this.S.theme]) this.S.theme = 'flow';
+    this.canvas = $('#stage');
     this.clock = new Clock();
-    this.track = null; this.idleReason = null; this.lyrTok = 0; this.statusText = '';
-    this.r = new Renderer(canvas);
+    this.track = null; this.idleKey = null; this.lyrTok = 0; this.lyrCtl = null; this.statusText = '';
+    this.r = new Renderer(this.canvas);
     this.r.onPalette = p => this.applyPalette(p);
     this.r.onPerfLow = () => toast('畫面有點吃力，已自動關閉遠處模糊', 5000);
     this.r.setTheme(this.S.theme);
-    this.r.setOpts({ karaoke: this.S.karaoke, blur: this.S.blur, align: this.S.align, scale: this.S.scale, showInfo: this.S.showInfo });
-    this.rec = new Recorder(canvas);
-    this.rec.onstate = (on, blob, type) => this.onRecState(on, blob, type);
+    this.r.setOpts(this.viewOpts());
+    this.rec = new Recorder(this.canvas);
+    this.rec.onstate = (st, blob, type, reason) => this.onRecState(st, blob, type, reason);
+    this.rec.onwarn = code => this.onRecWarn(code);
     this.sources = { spotify: new SpotifySource(this), youtube: new YouTubeSource(this), demo: new DemoSource(this) };
     this.bindUI();
     this.resize();
     addEventListener('resize', () => this.resize());
-    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { this.r.layoutDirty = true; });
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => this.r.fontsChanged());
+    this.checkEnv();
 
     const q = new URLSearchParams(location.search);
     if (q.has('code') || q.has('error')) this.sources.spotify.handleRedirect().finally(() => this.setSource('spotify'));
@@ -1928,11 +2373,17 @@ const App = {
     this.updateDock();
     this.last = performance.now();
     requestAnimationFrame(() => this.frame());
-    if (location.protocol === 'file:') toast('請用 start.bat 開啟：直接點兩下 HTML 檔會連不到 Spotify 和 YouTube', 9000);
   },
+  viewOpts() { const S = this.S; return { karaoke: S.karaoke, blur: S.blur, align: S.align, scale: S.scale, showInfo: S.showInfo, credit: S.credit }; },
   save() { Store.set('settings', this.S); },
 
+  /* ---------- drawing loop ---------- */
+  hidden() { return document.hidden || !!this.simHidden; },
   frame() {
+    if (!this.hidden()) this.step();
+    requestAnimationFrame(() => this.frame());
+  },
+  step() {
     const now = performance.now();
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
@@ -1940,57 +2391,88 @@ const App = {
     this.r.draw(songT, songT - this.S.offset, dt, this.clock.playing);
     if (this.rec.active) {
       const s = fmtTime(this.rec.elapsed());
-      if (this.recShown !== s) { this.recShown = s; $('#recTime').textContent = s; }
+      if (this.recShown !== s) { this.recShown = s; $('#recTime').textContent = s; if (this.rec.streaming) $('#recBytes').textContent = (this.rec.bytes / 1048576).toFixed(1) + ' MB'; }
     }
-    requestAnimationFrame(() => this.frame());
+    this.updateScrub(songT);
+    const line = this.r.curLine || '';
+    if (line !== this.srLine) { this.srLine = line; $('#srLyric').textContent = line; }
+  },
+  /* a hidden tab gets no animation frames; while recording, a worker keeps time so the video never freezes.
+     The worker waits for each frame to finish before sending the next tick, so a slow machine never builds a backlog. */
+  startTicker(fps) {
+    if (this.ticker) return;
+    try {
+      const src = 'let id=0,busy=false;onmessage=e=>{if(e.data==="done"){busy=false;return}clearInterval(id);busy=false;' +
+        'if(e.data>0)id=setInterval(()=>{if(!busy){busy=true;postMessage(0)}},1000/e.data)}';
+      this.tickerUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      const w = (this.ticker = new Worker(this.tickerUrl));
+      w.onmessage = () => {
+        try { if (this.hidden()) this.step(); } finally { if (this.ticker === w) w.postMessage('done'); }
+      };
+      w.postMessage(fps);
+    } catch (e) { this.ticker = null; }
+  },
+  stopTicker() {
+    if (!this.ticker) return;
+    this.ticker.terminate(); this.ticker = null;
+    URL.revokeObjectURL(this.tickerUrl);
   },
 
   /* ---------- playback events from the sources ---------- */
   onPlayback(track, pos, playing, ts = performance.now()) {
-    this.idleReason = null;
+    this.idleKey = null;
     if (!this.track || this.track.key !== track.key) {
-      if (this.rec.active && this.S.recAutoStop && this.track) { this.rec.stop(); toast('換歌了，已停止錄影'); }
+      if (this.rec.active && this.S.recAutoStop && this.track) { this.rec.stop('ended'); toast('換歌了，已停止錄影'); }
       this.track = track;
       this.clock.sync(pos, playing, ts, true);
       this.r.setTrack(track);
+      this.canvas.setAttribute('aria-label', '歌詞畫面：' + track.title + (track.artist ? '，' + track.artist : ''));
       this.loadLyrics(track);
     } else {
       const pred = this.clock.now(ts);
-      if (this.rec.active && this.S.recAutoStop && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop(); toast('歌曲播完，已停止錄影'); }
+      if (this.rec.active && this.S.recAutoStop && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop('ended'); toast('歌曲播完，已停止錄影'); }
       this.clock.sync(pos, playing, ts);
       if (track.duration && !this.track.duration) this.track.duration = track.duration;
     }
     this.setStatus(this.S.source === 'demo' ? '示範模式' : `${SOURCE_NAME[this.S.source]} ${playing ? '播放中' : '已暫停'}`);
   },
-  onIdle(reason) {
-    if (this.idleReason === reason && !this.track) return;
-    this.idleReason = reason;
-    if (this.track) { this.track = null; this.r.setTrack(null); }
+  /* sources describe their own idle state: { key, title, hint, status } */
+  onIdle(info) {
+    if (this.idleKey === info.key && !this.track) return;
+    this.idleKey = info.key;
+    if (this.track) { this.track = null; this.r.setTrack(null); this.canvas.setAttribute('aria-label', '歌詞畫面'); }
     this.lyrTok++;
-    const [note, hint] = IDLE_TEXT[reason] || ['等待播放', ''];
-    this.r.setLyrics({ status: 'idle', note, hint });
-    this.setStatus(reason === 'spotify-login' ? 'Spotify 未連接' : `${SOURCE_NAME[this.S.source]} 待命`);
+    if (this.lyrCtl) { this.lyrCtl.abort(); this.lyrCtl = null; }
+    this.r.setLyrics({ status: 'idle', note: info.title, hint: info.hint || '' });
+    if (info.status) this.setStatus(info.status);
   },
   setStatus(text) { if (text !== this.statusText) { this.statusText = text; $('#status').textContent = text; } },
+  seekTo(t) { if (this.src && this.src.canSeek && this.src.seekTo) this.src.seekTo(t); },
 
   /* ---------- lyrics ---------- */
   async loadLyrics(track, opts = {}) {
     const tok = ++this.lyrTok;
-    if (track.lrc) { this.applyLrc(track.lrc, track); return; }
-    const imported = Store.get('lrcImport.' + track.key, null);
+    if (this.lyrCtl) { this.lyrCtl.abort(); this.lyrCtl = null; } // the previous song's lookup is no longer wanted
+    const imported = Store.get('lrcImport.' + track.key, null); // the user's own file wins, even over the demo song's built-in lyrics
     if (imported) { this.applyLrc(imported, track); return; }
+    if (track.lrc) { this.applyLrc(track.lrc, track); return; }
+    const ctl = (this.lyrCtl = new AbortController());
     this.r.setLyrics({ status: 'loading' });
     try {
-      const rec = await Lyrics.find(track, opts);
+      const rec = await Lyrics.find(track, Object.assign({ signal: ctl.signal }, opts));
       if (tok !== this.lyrTok) return;
       this.applyRecord(rec, track);
     } catch (e) {
-      if (tok !== this.lyrTok) return;
+      if (tok !== this.lyrTok || e.name === 'AbortError') return;
       console.warn('[lyrics]', e);
-      this.r.setLyrics({ status: 'error', note: e.message === 'RATE_LIMIT' ? '歌詞資料庫請求太頻繁，等幾秒再按 L 重試' : '連不到歌詞資料庫 lrclib.net，檢查網路後按 L 重試' });
-    }
+      const note = e.message === 'RATE_LIMIT' ? '歌詞資料庫請求太頻繁，等幾秒再按 L 重試'
+        : e.code === 'TIMEOUT' ? `歌詞資料庫超過 ${Math.round(Lyrics.timeoutMs / 1000)} 秒沒有回應，按 L 重試`
+        : '連不到歌詞資料庫 lrclib.net，檢查網路後按 L 重試';
+      this.r.setLyrics({ status: 'error', note });
+    } finally { if (this.lyrCtl === ctl) this.lyrCtl = null; }
   },
   applyRecord(rec, track) {
+    if (rec && rec.none) { this.r.setLyrics({ status: 'off' }); return; }
     if (!rec) { this.r.setLyrics({ status: 'notfound' }); return; }
     if (rec.syncedLyrics) { this.applyLrc(rec.syncedLyrics, track); return; }
     if (rec.instrumental) { this.r.setLyrics({ status: 'instrumental' }); return; }
@@ -2003,14 +2485,22 @@ const App = {
     const plain = String(text).replace(/\r/g, '').split('\n').filter(l => !/^\s*\[[a-z#]+:.*\]\s*$/i.test(l));
     this.r.setLyrics(plain.some(l => l.trim()) ? { status: 'plain', plain } : { status: 'notfound' });
   },
-  importLrc(text, name) {
+  stopLyricsLookup() { this.lyrTok++; if (this.lyrCtl) { this.lyrCtl.abort(); this.lyrCtl = null; } },
+  async importFile(file) {
     const t = this.track;
-    if (!t) { toast('先播放一首歌，再匯入歌詞'); return; }
+    if (!t) { toast('先播放一首歌，再匯入歌詞', 5000); return; }
+    if (file.size > 1024 * 1024) { toast(`「${file.name}」太大了。LRC 歌詞檔通常只有幾 KB，確認選對檔案了嗎？`, 0); return; }
+    let text;
+    try { text = decodeText(await file.arrayBuffer()); } catch (e) { toast('讀不到這個檔案', 6000); return; }
+    const info = LRC.inspect(text);
+    if (info.kind === 'binary') { toast(`「${file.name}」不是文字檔，沒辦法當歌詞匯入`, 0); return; }
+    if (info.kind === 'empty') { toast(`「${file.name}」裡面沒有歌詞`, 0); return; }
     Store.set('lrcImport.' + t.key, text);
     Store.del('lyricsPick.' + t.key);
-    this.lyrTok++;
+    this.stopLyricsLookup();
     this.applyLrc(text, t);
-    toast('已匯入 ' + name);
+    if (info.kind === 'synced') toast(`已匯入 ${file.name}（${info.lines} 行同步歌詞）`, 4000);
+    else toast(`已匯入 ${file.name}。這個檔案沒有時間標記，會當成未同步歌詞，跟著進度慢慢捲動。`, 8000);
   },
   resetLyrics() {
     const t = this.track;
@@ -2020,23 +2510,49 @@ const App = {
     this.loadLyrics(t, { force: true });
     toast('改回自動配對');
   },
+  pinNone() {
+    const t = this.track;
+    if (!t) return;
+    Store.set('lyricsPick.' + t.key, 'none'); Store.del('lrcImport.' + t.key);
+    Lyrics.clearCache(t.key);
+    this.stopLyricsLookup();
+    this.r.setLyrics({ status: 'off' });
+    $('#dlgSearch').close();
+    toast('這首歌之後不顯示歌詞。按 L 可以改回來。', 5000);
+  },
 
   /* ---------- sources ---------- */
   setSource(name) {
     if (!this.sources[name]) name = 'demo';
     if (this.src) this.src.stop();
     this.S.source = name; this.save();
-    this.track = null; this.idleReason = null; this.lyrTok++;
+    this.track = null; this.idleKey = null;
+    this.stopLyricsLookup();
     this.r.setTrack(null);
     this.r.setLyrics({ status: 'idle', note: '等待播放' });
     this.clock.sync(0, false, performance.now(), true);
-    $$('.seg button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.src === name)));
+    $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === name)));
+    this.scrubShown = null;
     this.src = this.sources[name];
     this.src.start();
     if (name === 'spotify' && !this.sources.spotify.token) this.openSpotify();
     if (name === 'youtube' && !this.sources.youtube.videoId) this.openYoutube();
   },
   showYtCard(on) { $('#ytcard').hidden = !on; },
+  checkEnv() {
+    const k = Env.kind();
+    const msg = {
+      file: '直接點兩下 HTML 檔打開時，Spotify 和 YouTube 不能用（示範曲和錄影可以）。請改用線上版，或在資料夾裡點兩下 start.bat。',
+      localhost: 'Spotify 不接受 localhost 網址。把網址裡的 localhost 換成 127.0.0.1 就能登入。',
+      http: '這個網址不是 https，Spotify 登入和錄影可能不能用。',
+    }[k];
+    if (!msg) return;
+    $('#envMsg').textContent = msg;
+    const a = $('#envLink');
+    if (k === 'localhost') { a.href = location.href.replace('//localhost', '//127.0.0.1'); a.textContent = '改用 127.0.0.1 開啟'; }
+    else { a.href = LIVE_URL; a.textContent = '開啟線上版'; }
+    $('#envBar').hidden = false;
+  },
 
   /* ---------- dialogs ---------- */
   openSpotify() {
@@ -2045,9 +2561,9 @@ const App = {
     $('#spClient').value = sp.clientId || '';
     $('#spLogout').hidden = !sp.token;
     w.hidden = !prob;
-    w.textContent = prob === 'file' ? '請用 start.bat 開啟程式。直接打開 HTML 檔無法登入 Spotify。'
-      : prob === 'localhost' ? 'Spotify 不接受 localhost。請改用 http://127.0.0.1:8888/ 開啟這個頁面。'
-      : prob === 'http' ? 'Spotify 只接受 127.0.0.1 或 https 網址，請用 start.bat 開啟。' : '';
+    w.textContent = prob === 'file' ? '直接打開 HTML 檔無法登入 Spotify。請改用線上版，或用 start.bat 開啟。'
+      : prob === 'localhost' ? 'Spotify 不接受 localhost。請改用 http://127.0.0.1 開頭的網址開啟這個頁面。'
+      : prob ? 'Spotify 只接受 https 或 127.0.0.1 網址。請改用線上版，或用 start.bat 開啟。' : '';
     $('#dlgSpotify').showModal();
   },
   openYoutube() { $('#ytUrl').value = Store.get('yt.last', ''); $('#dlgYoutube').showModal(); setTimeout(() => $('#ytUrl').select(), 30); },
@@ -2055,7 +2571,8 @@ const App = {
     const t = this.track;
     $('#q').value = t ? [Lyrics.cleanTitle(t.title), String(t.artist || '').split(',')[0]].join(' ').trim() : '';
     $('#results').replaceChildren();
-    $('#btnAuto').hidden = !t;
+    this.hidePreview();
+    $('#btnAuto').hidden = !t; $('#btnNone').hidden = !t;
     $('#dlgSearch').showModal();
     if ($('#q').value) this.doSearch();
   },
@@ -2063,11 +2580,13 @@ const App = {
   async doSearch() {
     const q = $('#q').value.trim(), ul = $('#results');
     if (!q) return;
-    const tok = (this.searchTok = (this.searchTok || 0) + 1);
+    this.hidePreview();
+    if (this.searchCtl) this.searchCtl.abort();
+    const ctl = (this.searchCtl = new AbortController());
     ul.replaceChildren(this.msgItem('搜尋中…'));
     try {
-      const list = await Lyrics.search({ q });
-      if (tok !== this.searchTok) return;
+      const list = await Lyrics.search({ q }, ctl.signal);
+      if (ctl !== this.searchCtl) return;
       if (!list.length) { ul.replaceChildren(this.msgItem('沒有結果。換個寫法試試，例如只打歌名。')); return; }
       const t = this.track;
       list.sort((a, b) => (b.syncedLyrics ? 1 : 0) - (a.syncedLyrics ? 1 : 0) || (t && t.duration ? Math.abs(a.duration - t.duration) - Math.abs(b.duration - t.duration) : 0));
@@ -2087,79 +2606,147 @@ const App = {
         bd.textContent = r.syncedLyrics ? '同步' : r.instrumental ? '純音樂' : '純文字';
         if (r.syncedLyrics) bd.classList.add('on');
         b.append(main, du, bd);
-        b.onclick = () => {
-          const cur = this.track;
-          if (!cur) { toast('先播放一首歌，再套用歌詞'); return; }
-          Store.set('lyricsPick.' + cur.key, r.id); Store.del('lrcImport.' + cur.key);
-          Lyrics.clearCache(cur.key);
-          this.lyrTok++;
-          this.applyRecord(r, cur);
-          $('#dlgSearch').close();
-          toast('已套用這份歌詞');
-        };
+        b.onclick = () => this.showPreview(r);
         li.appendChild(b); ul.appendChild(li);
       }
     } catch (e) {
-      if (tok !== this.searchTok) return;
-      ul.replaceChildren(this.msgItem(e.message === 'RATE_LIMIT' ? '請求太頻繁，等幾秒再試' : '連不到 lrclib.net，檢查網路後再試'));
+      if (ctl !== this.searchCtl || e.name === 'AbortError') return;
+      ul.replaceChildren(this.msgItem(e.message === 'RATE_LIMIT' ? '請求太頻繁，等幾秒再試'
+        : e.code === 'TIMEOUT' ? 'lrclib.net 沒有回應，等一下再試' : '連不到 lrclib.net，檢查網路後再試'));
     }
   },
+  /* look before replacing: the first lines of a result, then apply or go back */
+  showPreview(r) {
+    this.pvRecord = r;
+    $('#pvTitle').textContent = r.trackName || r.name || '';
+    $('#pvMeta').textContent = [r.artistName, r.albumName, r.duration ? fmtTime(r.duration) : ''].filter(Boolean).join('，');
+    $('#pvKind').textContent = r.syncedLyrics ? '同步歌詞' : r.instrumental ? '純音樂' : '未同步歌詞';
+    const lines = r.syncedLyrics ? LRC.parse(r.syncedLyrics).lines.map(l => l.text).filter(Boolean)
+      : String(r.plainLyrics || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const ul = $('#pvLines');
+    ul.replaceChildren();
+    if (!lines.length) ul.appendChild(this.msgItem(r.instrumental ? '純音樂，沒有歌詞' : '這份沒有歌詞內容'));
+    for (const l of lines.slice(0, 8)) { const li = document.createElement('li'); li.textContent = l; ul.appendChild(li); }
+    $('#searchList').hidden = true;
+    $('#preview').hidden = false;
+    $('#pvApply').focus();
+  },
+  hidePreview() { $('#preview').hidden = true; $('#searchList').hidden = false; this.pvRecord = null; },
+  applyPreview() {
+    const r = this.pvRecord, cur = this.track;
+    if (!r) return;
+    if (!cur) { toast('先播放一首歌，再套用歌詞', 5000); return; }
+    Store.set('lyricsPick.' + cur.key, r.id); Store.del('lrcImport.' + cur.key);
+    Lyrics.remember(cur.key, r);
+    this.stopLyricsLookup();
+    this.applyRecord(r, cur);
+    $('#dlgSearch').close();
+    toast('已套用這份歌詞');
+  },
+
+  /* ---------- recording ---------- */
   openRec() {
     if (this.rec.active) { this.rec.stop(); return; }
+    if (this.rec.busy) { this.cancelCountdown(); return; }
     const f = $('#recForm');
     f.aud.value = this.S.recAudio;
     $('#recFps').value = String(this.S.recFps);
     $('#recQ').value = this.S.recQuality;
+    $('#recFmt').value = this.S.recFormat;
     $('#recAuto').checked = !!this.S.recAutoStop;
-    const c = $('#stage');
-    $('#recSize').textContent = `${c.width} × ${c.height}`;
+    $('#recCd').checked = !!this.S.recCountdown;
+    $('#recSize').textContent = `${this.canvas.width} × ${this.canvas.height}`;
     this.updateRecHint();
     $('#dlgRec').showModal();
   },
   updateRecHint() {
-    const aud = $('#recForm').aud.value, sp = this.S.source === 'spotify';
+    const aud = $('#recForm').aud.value, src = this.S.source;
     const lines = [];
-    if (aud === 'system' || aud === 'both') lines.push(sp ? '按開始後會跳出分享視窗：選「整個螢幕」，並打開「分享系統音訊」。' : '按開始後會跳出分享視窗：選「這個分頁」，並打開「分享分頁音訊」。');
+    if (aud === 'system' || aud === 'both') {
+      if (src === 'spotify') lines.push('按開始後會跳出分享視窗：選「整個螢幕」，並打開「同時分享系統音訊」。');
+      else if (src === 'demo') lines.push('示範曲本身沒有聲音，錄出來會是靜音。');
+      else lines.push('按開始後會跳出分享視窗：選「這個分頁」，並打開「同時分享分頁音訊」。');
+    }
     if (aud === 'mic' || aud === 'both') lines.push('戴耳機錄，麥克風才不會收到喇叭的聲音。');
     if (aud === 'none') lines.push('只錄畫面，之後可以在剪輯軟體配上音樂。');
-    if (this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先按 V 把比例切到 9:16。');
-    lines.push('錄影時讓這個分頁保持在最前面，切走畫面會停格。');
+    if (this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先把比例切到 9:16。');
+    lines.push('切到其他分頁也會繼續錄，不過留在這個分頁畫面最順。');
     $('#recHint').textContent = lines.join(' ');
   },
   startRec(ev) {
     ev.preventDefault();
     const f = $('#recForm');
-    this.S.recAudio = f.aud.value;
-    this.S.recFps = parseInt($('#recFps').value, 10) || 60;
-    this.S.recQuality = $('#recQ').value;
-    this.S.recAutoStop = $('#recAuto').checked;
+    Object.assign(this.S, {
+      recAudio: f.aud.value, recFps: parseInt($('#recFps').value, 10) || 60, recQuality: $('#recQ').value,
+      recFormat: $('#recFmt').value, recAutoStop: $('#recAuto').checked, recCountdown: $('#recCd').checked,
+    });
     this.save();
     $('#dlgRec').close();
-    this.rec.start({
-      audio: this.S.recAudio, fps: this.S.recFps,
-      bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
-      preferTab: this.S.source !== 'spotify',
-    }).catch(err => {
-      const code = (err && (err.code || err.name)) || '';
-      if (code === 'NO_SHARED_AUDIO') toast('沒有收到聲音：分享時要打開「分享音訊」，再試一次', 7000);
-      else if (code === 'NotAllowedError') toast('分享或麥克風權限被取消了，沒有開始錄影', 6000);
-      else if (code === 'UNSUPPORTED') toast('這個瀏覽器不能錄影，請用最新版 Chrome 或 Edge', 7000);
-      else toast('無法開始錄影：' + ((err && err.message) || code), 7000);
+    this.rec.prepare({
+      audio: this.S.recAudio, fps: this.S.recFps, bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
+      preferTab: this.S.source !== 'spotify', format: this.S.recFormat,
+    })
+      .then(() => this.countdown(this.S.recCountdown ? 3 : 0))
+      .then(go => { if (go) this.rec.begin(); else { this.rec.cancel(); toast('已取消錄影'); } })
+      .catch(err => this.recError(err));
+  },
+  recError(err) {
+    const code = (err && (err.code || err.name)) || '';
+    if (code === 'NO_SHARED_AUDIO') {
+      toast(this.S.source === 'spotify'
+        ? '沒有收到聲音。再錄一次，分享視窗選「整個螢幕」並打開「同時分享系統音訊」。分享視窗沒有這個選項的話（例如 Mac），改在分頁裡播 Spotify 網頁版，分享那個分頁並打開「同時分享分頁音訊」。'
+        : '沒有收到聲音。再錄一次，分享視窗選「這個分頁」，並打開「同時分享分頁音訊」。', 0);
+    } else if (code === 'NotAllowedError') toast('分享或麥克風權限被取消了，沒有開始錄影', 6000);
+    else if (code === 'NotFoundError') toast('找不到麥克風，請確認已經接上', 0);
+    else if (code === 'UNSUPPORTED') toast('這個瀏覽器不能錄影，請用最新版 Chrome 或 Edge', 0);
+    else if (code !== 'BUSY') toast('無法開始錄影：' + ((err && err.message) || code), 0);
+  },
+  countdown(n) {
+    if (!n) return Promise.resolve(true);
+    const el = $('#countdown'), num = $('#cdNum');
+    const pop = v => { num.textContent = v; num.classList.remove('pop'); void num.offsetWidth; num.classList.add('pop'); };
+    return new Promise(res => {
+      let left = n;
+      const iv = setInterval(() => { left--; if (left <= 0) done(true); else pop(left); }, 1000);
+      const done = ok => { clearInterval(iv); el.hidden = true; this.cdCancel = null; res(ok); };
+      this.cdCancel = () => done(false);
+      el.hidden = false; pop(left);
+      $('#cdCancel').focus();
     });
   },
-  onRecState(on, blob, type) {
+  cancelCountdown() { if (this.cdCancel) this.cdCancel(); },
+  onRecState(st, blob, type, reason) {
+    const on = st === 'recording' || st === 'paused';
     document.body.classList.toggle('recording', on);
+    document.body.classList.toggle('rec-paused', st === 'paused');
     $('#recbar').hidden = !on;
     $('#btnRec .lbl').textContent = on ? '停止' : '錄影';
     $('#btnLayout').disabled = on;
-    if (on) { this.recShown = ''; return; }
+    $('#recPause').textContent = st === 'paused' ? '繼續' : '暫停';
+    $('#recBytes').hidden = !this.rec.streaming; // MP4 is only handed over at the end, so there is no running size to show
+    this.recShown = '';
+    if (on) { this.startTicker(this.S.recFps || 30); return; }
+    this.stopTicker();
     this.resize();
     if (!blob) return;
-    if (blob.size < 2000) { toast('錄到的檔案是空的，可能分頁被切到背景了', 6000); return; }
+    if (blob.size < 2000) { toast('錄到的檔案是空的', 0); return; }
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
     const name = `${safeName(this.track ? this.track.title : 'lyrics')}-${stamp()}.${ext}`;
     downloadBlob(blob, name);
-    toast(`已存成 ${name}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+    toast((reason === 'limit' ? '到了容量上限，已自動停止。' : '') + `已存成 ${name}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+  },
+  onRecWarn(code) {
+    if (code === 'EMPTY') {
+      if (this.S.recFormat !== 'webm') {
+        this.S.recFormat = 'webm'; this.save();
+        toast('剛開始錄的影片是空的，這台電腦的 MP4 編碼可能有問題。已改用 WebM 格式，請再按一次錄影。', 0);
+      } else toast('剛開始錄的影片是空的。把流暢度改成 30 fps、畫質改成標準，再錄一次試試。', 0);
+    } else if (code === 'NEAR_LIMIT') {
+      const left = Math.max(1, Math.round((this.rec.maxBytes - this.rec.size()) / Math.max(1, this.rec.bps / 8) / 60));
+      toast(this.rec.streaming
+        ? `錄影檔快到 ${(this.rec.maxBytes / 1073741824).toFixed(1)} GB 上限，到了會自動停止並存檔。`
+        : `MP4 錄影在存檔前都放在記憶體裡，大約再 ${left} 分鐘會到上限，到時會自動停止並存檔。要錄更久，請改用 WebM 格式。`, 0);
+    }
   },
 
   /* ---------- view controls ---------- */
@@ -2168,33 +2755,88 @@ const App = {
     if (Math.abs(this.S.offset) < 0.05) this.S.offset = 0;
     this.save(); this.updateDock();
   },
+  setTheme(id) { this.S.theme = id; this.save(); this.r.setTheme(id); this.updateDock(); },
+  setLayout(id) {
+    if (this.rec.busy) { toast('錄影中不能換比例'); return false; }
+    this.S.layout = id; this.save(); this.resize(); this.updateDock();
+    return true;
+  },
   cycleTheme() {
-    const i = THEME_ORDER.indexOf(this.S.theme);
-    this.S.theme = THEME_ORDER[(i + 1) % THEME_ORDER.length];
-    this.r.setTheme(this.S.theme); this.save(); this.updateDock();
-    toast('風格：' + THEMES[this.S.theme].label, 1600);
+    const id = THEME_ORDER[(THEME_ORDER.indexOf(this.S.theme) + 1) % THEME_ORDER.length];
+    this.setTheme(id);
+    toast('風格：' + THEMES[id].label, 1600);
   },
   cycleLayout() {
-    if (this.rec.active) { toast('錄影中不能換比例'); return; }
-    const i = LAYOUTS.indexOf(this.S.layout);
-    this.S.layout = LAYOUTS[(i + 1) % LAYOUTS.length];
-    this.save(); this.resize(); this.updateDock();
-    toast('畫面比例：' + LAYOUT_LABEL[this.S.layout] + (this.S.layout === 'fit' ? '（跟著視窗）' : `（${LAYOUT_SIZE[this.S.layout].join(' × ')}）`), 2000);
+    const id = LAYOUTS[(LAYOUTS.indexOf(this.S.layout) + 1) % LAYOUTS.length];
+    if (this.setLayout(id)) toast('畫面比例：' + LAYOUT_INFO[id].label + '（' + LAYOUT_INFO[id].desc + '）', 2000);
   },
   updateDock() {
     const o = this.S.offset;
     $('#offVal').textContent = (o > 0 ? '+' : '') + o.toFixed(1) + 's';
     $('#btnTheme').textContent = THEMES[this.S.theme].label;
-    $('#btnLayout').textContent = LAYOUT_LABEL[this.S.layout];
+    $('#btnLayout').textContent = LAYOUT_INFO[this.S.layout].label;
+  },
+  /* style and size menus; hovering a style previews it on the canvas */
+  openMenu(kind, anchor) {
+    const was = this.menu && this.menu.kind;
+    this.closeMenu();
+    if (was === kind) return;
+    const isTheme = kind === 'theme';
+    const items = isTheme ? THEME_ORDER.map(id => ({ id, label: THEMES[id].label, desc: THEMES[id].desc }))
+      : LAYOUTS.map(id => ({ id, label: LAYOUT_INFO[id].label, desc: LAYOUT_INFO[id].desc }));
+    const cur = isTheme ? this.S.theme : this.S.layout;
+    const m = document.createElement('div');
+    m.className = 'menu glass'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', isTheme ? '風格' : '畫面比例');
+    for (const it of items) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', String(it.id === cur)); b.dataset.id = it.id;
+      if (!isTheme) { const box = document.createElement('span'); box.className = 'ratio r-' + it.id.replace(':', 'x'); b.appendChild(box); }
+      const tx = document.createElement('span'); tx.className = 'mi';
+      const l = document.createElement('span'); l.className = 'ml'; l.textContent = it.label;
+      const d = document.createElement('span'); d.className = 'md'; d.textContent = it.desc;
+      tx.append(l, d); b.appendChild(tx);
+      b.onclick = () => { this.closeMenu(true); if (isTheme) this.setTheme(it.id); else this.setLayout(it.id); };
+      if (isTheme) { b.addEventListener('pointerenter', () => this.r.setTheme(it.id)); b.addEventListener('focus', () => this.r.setTheme(it.id)); }
+      m.appendChild(b);
+    }
+    $('.ui').appendChild(m);
+    const ar = anchor.getBoundingClientRect();
+    m.style.left = clamp(ar.left + ar.width / 2 - m.offsetWidth / 2, 8, innerWidth - m.offsetWidth - 8) + 'px';
+    m.style.bottom = Math.round(innerHeight - ar.top + 12) + 'px';
+    anchor.setAttribute('aria-expanded', 'true');
+    this.menu = { el: m, kind, anchor };
+    m.addEventListener('keydown', ev => {
+      const bs = $$('button', m), i = bs.indexOf(document.activeElement);
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowRight') { ev.preventDefault(); bs[(i + 1) % bs.length].focus(); }
+      else if (ev.key === 'ArrowUp' || ev.key === 'ArrowLeft') { ev.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
+      else if (ev.key === 'Home') { ev.preventDefault(); bs[0].focus(); }
+      else if (ev.key === 'End') { ev.preventDefault(); bs[bs.length - 1].focus(); }
+      else if (ev.key === 'Escape' || ev.key === 'Tab') { ev.preventDefault(); this.closeMenu(true); }
+      else return;
+      ev.stopPropagation(); // handled here; the global shortcut handler must not see it
+    });
+    this.menuOutside = e => { if (!m.contains(e.target) && !anchor.contains(e.target)) this.closeMenu(); };
+    setTimeout(() => document.addEventListener('pointerdown', this.menuOutside), 0);
+    (m.querySelector('[aria-checked="true"]') || m.firstChild).focus();
+  },
+  closeMenu(refocus) {
+    const mm = this.menu;
+    if (!mm) return;
+    this.menu = null;
+    mm.el.remove();
+    document.removeEventListener('pointerdown', this.menuOutside);
+    mm.anchor.setAttribute('aria-expanded', 'false');
+    if (mm.kind === 'theme') this.r.setTheme(this.S.theme); // drop the hover preview
+    if (refocus) mm.anchor.focus();
   },
   toggleFull() {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else document.documentElement.requestFullscreen().catch(() => toast('這個瀏覽器不允許全螢幕'));
   },
   resize() {
-    const c = $('#stage');
+    const c = this.canvas;
     let W, H;
-    if (this.rec && this.rec.active) { W = c.width; H = c.height; } // never change size mid-recording
+    if (this.rec && this.rec.busy) { W = c.width; H = c.height; } // never change size mid-recording
     else if (LAYOUT_SIZE[this.S.layout]) [W, H] = LAYOUT_SIZE[this.S.layout];
     else {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -2204,7 +2846,7 @@ const App = {
     }
     W -= W % 2; H -= H % 2;
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; this.r.resize(W, H); }
-    const s = Math.min(innerWidth / W, innerHeight / H);
+    const s = Math.min(innerWidth / W, innerHeight / H); // same factor on both axes: never stretched
     c.style.width = Math.round(W * s) + 'px';
     c.style.height = Math.round(H * s) + 'px';
   },
@@ -2212,6 +2854,23 @@ const App = {
     const st = document.documentElement.style;
     st.setProperty('--accent', p.accent.map(v => v | 0).join(' '));
     st.setProperty('--tint', p.dark.map(v => v | 0).join(' '));
+  },
+  updateScrub(songT) {
+    const src = this.src, t = this.track;
+    const show = !!(src && src.canSeek && t && t.duration > 0);
+    if (show !== this.scrubShown) {
+      this.scrubShown = show;
+      $('#scrub').hidden = !show;
+      $('#volWrap').hidden = !(src && src.hasVolume);
+      if (src && src.hasVolume) $('#vol').value = String(Store.get('yt.vol', 100));
+    }
+    if (!show || this.scrubbing) return;
+    const v = String(Math.round(clamp(songT / t.duration, 0, 1) * 1000));
+    if (v !== this.scrubV) { this.scrubV = v; $('#seek').value = v; }
+    const a = fmtTime(songT), b = fmtTime(t.duration);
+    if (a !== this.tCurS || b !== this.tDurS) $('#seek').setAttribute('aria-valuetext', a + ' / ' + b);
+    if (a !== this.tCurS) { this.tCurS = a; $('#tCur').textContent = a; }
+    if (b !== this.tDurS) { this.tDurS = b; $('#tDur').textContent = b; }
   },
 
   /* ---------- wiring ---------- */
@@ -2224,12 +2883,16 @@ const App = {
     $('#btnSearch').onclick = () => this.openSearch();
     $('#offMinus').onclick = () => this.nudge(-0.1);
     $('#offPlus').onclick = () => this.nudge(0.1);
-    $('#btnTheme').onclick = () => this.cycleTheme();
-    $('#btnLayout').onclick = () => this.cycleLayout();
+    $('#btnTheme').onclick = ev => this.openMenu('theme', ev.currentTarget);
+    $('#btnLayout').onclick = ev => this.openMenu('layout', ev.currentTarget);
     $('#btnFull').onclick = () => this.toggleFull();
     $('#btnRec').onclick = () => this.openRec();
     $('#recStop').onclick = () => this.rec.stop();
+    $('#recPause').onclick = () => (this.rec.state === 'paused' ? this.rec.resume() : this.rec.pause());
+    $('#cdCancel').onclick = () => this.cancelCountdown();
     $('#btnSettings').onclick = () => this.openSettings();
+    $('#toast .x').onclick = () => hideToast();
+    $('#envClose').onclick = () => { $('#envBar').hidden = true; };
 
     $('#spCopy').onclick = () => {
       const v = $('#spRedirect').textContent;
@@ -2238,7 +2901,7 @@ const App = {
     $('#spConnect').onclick = () => {
       const id = $('#spClient').value.trim();
       if (!/^[0-9a-f]{32}$/i.test(id)) { toast('Client ID 應該是 32 個英文和數字'); $('#spClient').focus(); return; }
-      if (this.sources.spotify.originProblem()) { toast('目前的網址不能登入 Spotify，請照上面的提示用 127.0.0.1 開啟', 6000); return; }
+      if (this.sources.spotify.originProblem()) { toast('目前的網址不能登入 Spotify，請照上面的提示換一個開啟方式', 0); return; }
       this.sources.spotify.login(id);
     };
     $('#spLogout').onclick = () => { this.sources.spotify.logout(); $('#dlgSpotify').close(); toast('已中斷 Spotify 連線'); };
@@ -2254,9 +2917,12 @@ const App = {
     $('#searchClose').onclick = () => $('#dlgSearch').close();
     $('#btnImport').onclick = () => $('#lrcFile').click();
     $('#btnAuto').onclick = () => { $('#dlgSearch').close(); this.resetLyrics(); };
+    $('#btnNone').onclick = () => this.pinNone();
+    $('#pvApply').onclick = () => this.applyPreview();
+    $('#pvBack').onclick = () => { this.hidePreview(); const b = $('#results .res'); if (b) b.focus(); };
     $('#lrcFile').addEventListener('change', async ev => {
       const f = ev.target.files && ev.target.files[0];
-      if (f) { this.importLrc(await f.text(), f.name); $('#dlgSearch').close(); }
+      if (f) { $('#dlgSearch').close(); await this.importFile(f); }
       ev.target.value = '';
     });
     $('#recForm').addEventListener('submit', ev => this.startRec(ev));
@@ -2265,24 +2931,41 @@ const App = {
     $$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
     // settings
-    const bindCheck = (id, key) => $(id).addEventListener('change', ev => { this.S[key] = ev.target.checked; this.save(); this.r.setOpts({ [key]: this.S[key] }); if (key === 'blur' && this.S.blur) this.r.perfLow = false; });
-    bindCheck('#setKaraoke', 'karaoke'); bindCheck('#setBlur', 'blur'); bindCheck('#setInfo', 'showInfo');
+    const bindCheck = (id, key) => $(id).addEventListener('change', ev => {
+      this.S[key] = ev.target.checked; this.save(); this.r.setOpts({ [key]: this.S[key] });
+      if (key === 'blur' && this.S.blur) this.r.perfLow = false;
+    });
+    bindCheck('#setKaraoke', 'karaoke'); bindCheck('#setBlur', 'blur'); bindCheck('#setInfo', 'showInfo'); bindCheck('#setCredit', 'credit');
     $('#setAlign').addEventListener('change', ev => { this.S.align = ev.target.value; this.save(); this.r.setOpts({ align: this.S.align }); });
     $('#setScale').addEventListener('input', ev => { this.S.scale = parseFloat(ev.target.value) || 1; this.save(); this.r.setOpts({ scale: this.S.scale }); $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%'; });
     $('#setOffReset').onclick = () => { this.S.offset = 0; this.save(); this.updateDock(); toast('偏移已歸零'); };
+
+    // seek bar and volume (YouTube and demo; Spotify access is read-only)
+    const seek = $('#seek');
+    seek.addEventListener('input', () => { this.scrubbing = true; const t = this.track; if (t) $('#tCur').textContent = fmtTime(seek.value / 1000 * t.duration); });
+    seek.addEventListener('change', () => { const t = this.track; if (t) this.seekTo(seek.value / 1000 * t.duration); this.scrubbing = false; this.tCurS = ''; this.scrubV = ''; });
+    $('#vol').addEventListener('input', ev => { if (this.src && this.src.setVolume) this.src.setVolume(+ev.target.value); });
+
+    // click a lyric line to jump there, double-click elsewhere to play/pause
+    const cv = this.canvas;
+    const at = ev => { const b = cv.getBoundingClientRect(); return [(ev.clientX - b.left) * cv.width / b.width, (ev.clientY - b.top) * cv.height / b.height]; };
+    const lineAt = ev => (this.src && this.src.canSeek ? this.r.hitLine(...at(ev)) : -1);
+    cv.addEventListener('click', ev => { const i = lineAt(ev); if (i >= 0) this.seekTo(this.r.lyr.entries[i].time + this.S.offset + 0.02); });
+    cv.addEventListener('dblclick', ev => { if (lineAt(ev) < 0 && this.src && this.src.togglePlay) this.src.togglePlay(); });
+    cv.addEventListener('pointermove', ev => cv.classList.toggle('seekable', lineAt(ev) >= 0));
 
     // drag & drop .lrc
     let depth = 0;
     addEventListener('dragenter', ev => { if (ev.dataTransfer && [...ev.dataTransfer.types].includes('Files')) { depth++; document.body.classList.add('dragging'); } });
     addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) document.body.classList.remove('dragging'); });
     addEventListener('dragover', ev => ev.preventDefault());
-    addEventListener('drop', async ev => {
+    addEventListener('drop', ev => {
       ev.preventDefault(); depth = 0; document.body.classList.remove('dragging');
       const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-      if (f) this.importLrc(await f.text(), f.name);
+      if (f) this.importFile(f);
     });
 
-    // YouTube card can be dragged out of the way
+    // YouTube card can be dragged out of the way (YouTube requires the player to stay visible, at least 200 × 200)
     const card = $('#ytcard'), head = $('#ytcard .ythead');
     head.addEventListener('pointerdown', ev => {
       const r = card.getBoundingClientRect(), ox = ev.clientX - r.left, oy = ev.clientY - r.top;
@@ -2297,15 +2980,17 @@ const App = {
     addEventListener('pointerdown', () => { this.kbNav = false; }, true);
     addEventListener('keydown', ev => this.onKey(ev));
     // a mouse click should not leave focus on the button (Space would press it again)
-    document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('.ui button, .recbar button'); if (b && ev.detail > 0) b.blur(); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.rec.active) toast('剛才切到別的分頁，那段影片會停格', 5000); });
+    document.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('.ui button, .recbar button'); if (b && ev.detail > 0 && !b.closest('.menu')) b.blur(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.src && this.src.onVisible) this.src.onVisible(); });
 
     // hide the interface when the mouse rests
     let idleT = 0;
     const wake = () => {
       document.body.classList.remove('idle');
       clearTimeout(idleT);
-      idleT = setTimeout(() => { if (!document.querySelector('dialog[open]') && !document.querySelector('.ui :hover')) document.body.classList.add('idle'); }, 2600);
+      idleT = setTimeout(() => {
+        if (!document.querySelector('dialog[open]') && !this.menu && !document.querySelector('.ui :hover') && !document.querySelector('.ui :focus-visible')) document.body.classList.add('idle');
+      }, 2600);
     };
     ['pointermove', 'pointerdown', 'keydown', 'wheel'].forEach(e => addEventListener(e, wake, { passive: true }));
     wake();
@@ -2314,6 +2999,7 @@ const App = {
     $('#setKaraoke').checked = !!this.S.karaoke;
     $('#setBlur').checked = !!this.S.blur;
     $('#setInfo').checked = !!this.S.showInfo;
+    $('#setCredit').checked = !!this.S.credit;
     $('#setAlign').value = this.S.align;
     $('#setScale').value = String(this.S.scale);
     $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%';
@@ -2321,15 +3007,10 @@ const App = {
   },
   onKey(ev) {
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (this.cdCancel && ev.key === 'Escape') { ev.preventDefault(); this.cancelCountdown(); return; }
     const tgt = document.activeElement && document.activeElement.closest ? document.activeElement : null;
-    if (tgt && tgt.closest('input, select, textarea')) return;
-    if (document.querySelector('dialog[open]')) return;
-    const btn = tgt && tgt.closest('button');
-    if (btn) {
-      // keyboard users who tabbed to a button keep Space/Enter for it; after a mouse click the shortcut wins
-      if (ev.key === 'Enter' || (ev.key === ' ' && this.kbNav)) return;
-      btn.blur();
-    }
+    if (tgt && tgt.closest('input, select, textarea')) return; // typing never triggers shortcuts
+    if (document.querySelector('dialog[open]') || this.menu) return;
     const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
     const actions = {
       ' ': () => { if (this.src && this.src.togglePlay) this.src.togglePlay(); },
@@ -2340,11 +3021,18 @@ const App = {
       v: () => this.cycleLayout(),
       f: () => this.toggleFull(),
       r: () => this.openRec(),
+      p: () => { if (this.rec.state === 'paused') this.rec.resume(); else this.rec.pause(); },
       h: () => document.body.classList.toggle('hideui'),
       ArrowLeft: () => { if (this.src && this.src.seek) this.src.seek(-5); },
       ArrowRight: () => { if (this.src && this.src.seek) this.src.seek(5); },
     };
-    if (!actions[k]) return;
+    if (!actions[k]) return; // Tab, Escape, Enter… keep their normal meaning
+    const btn = tgt && tgt.closest('button');
+    if (btn) {
+      // keyboard users who tabbed to a button keep Space/Enter for it; after a mouse click the shortcut wins
+      if (ev.key === ' ' && this.kbNav) return;
+      btn.blur();
+    }
     ev.preventDefault(); // otherwise the key also lands in the text box of the dialog it opens
     actions[k]();
   },

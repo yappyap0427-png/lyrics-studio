@@ -1,18 +1,32 @@
-/* ---------- recorder: the canvas itself + optional shared audio / microphone ---------- */
+/* ---------- recorder: the canvas itself + optional shared audio / microphone ----------
+   states: idle → ready (permissions granted, countdown running) → recording ⇄ paused → idle
+   WebM arrives in 1 s chunks while recording. Chrome's MP4 writer hands everything over only at the end,
+   so for MP4 the size is estimated from the bitrate, and an empty file can only be caught after stopping. */
 class Recorder {
-  constructor(canvas) { this.canvas = canvas; this.mr = null; this.cleanup = []; this.t0 = 0; this.onstate = null; this.chunks = []; }
-  get active() { return !!this.mr && this.mr.state !== 'inactive'; }
-  static mime(withAudio) {
-    const list = withAudio
-      ? ['video/mp4;codecs=avc1.64002a,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2',
-        'video/mp4;codecs=avc1.64002a,opus', 'video/mp4;codecs=avc1,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-      : ['video/mp4;codecs=avc1.64002a', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.4d002a', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.mr = null; this.cleanup = []; this.chunks = []; this.bytes = 0;
+    this.state = 'idle';
+    this.onstate = null; this.onwarn = null;
+    this.maxBytes = 1.5 * 1024 * 1024 * 1024; // the recording lives in memory until saved
+    this.activeMs = 0; this.resumedAt = 0; this.warnedSize = false; this.bps = 0; this.streaming = false;
+  }
+  get active() { return this.state === 'recording' || this.state === 'paused'; }
+  get busy() { return this.state !== 'idle'; }
+  static mime(withAudio, format = 'auto') {
+    const mp4 = withAudio
+      ? ['video/mp4;codecs=avc1.64002a,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1.64002a,opus', 'video/mp4;codecs=avc1,opus']
+      : ['video/mp4;codecs=avc1.64002a', 'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.4d002a', 'video/mp4;codecs=avc1', 'video/mp4'];
+    const webm = withAudio ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'] : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const list = format === 'webm' ? webm : mp4.concat(webm);
     return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
   }
-  /* must be called straight from a click: getDisplayMedia needs the user gesture */
-  async start({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false } = {}) {
-    if (this.active) return;
+
+  /* step 1 — must be called straight from a click: getDisplayMedia needs the user gesture */
+  async prepare({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false, format = 'auto' } = {}) {
+    if (this.busy) throw Object.assign(new Error('BUSY'), { code: 'BUSY' });
     if (!window.MediaRecorder || !this.canvas.captureStream) throw Object.assign(new Error('UNSUPPORTED'), { code: 'UNSUPPORTED' });
+    this.state = 'ready';
     const streams = [];
     this.cleanup = [];
     try {
@@ -25,7 +39,7 @@ class Recorder {
         this.cleanup.push(() => ds.getTracks().forEach(t => t.stop()));
         const at = ds.getAudioTracks();
         if (!at.length) throw Object.assign(new Error('NO_SHARED_AUDIO'), { code: 'NO_SHARED_AUDIO' });
-        ds.getVideoTracks().forEach(t => t.addEventListener('ended', () => this.stop()));
+        ds.getVideoTracks().forEach(t => t.addEventListener('ended', () => this.stop('ended')));
         streams.push(new MediaStream(at));
       }
       if (audio === 'mic' || audio === 'both') {
@@ -33,45 +47,114 @@ class Recorder {
         this.cleanup.push(() => ms.getTracks().forEach(t => t.stop()));
         streams.push(ms);
       }
-    } catch (e) { this.release(); throw e; }
-
-    const v = this.canvas.captureStream(fps);
-    this.cleanup.push(() => v.getTracks().forEach(t => t.stop()));
-    let audioTracks = [];
-    if (streams.length === 1) audioTracks = streams[0].getAudioTracks();
-    else if (streams.length > 1) {
-      const ac = new AudioContext();
-      const dest = ac.createMediaStreamDestination();
-      for (const s of streams) ac.createMediaStreamSource(s).connect(dest);
-      this.cleanup.push(() => ac.close());
-      audioTracks = dest.stream.getAudioTracks();
+      const v = this.canvas.captureStream(fps);
+      this.cleanup.push(() => v.getTracks().forEach(t => t.stop()));
+      let audioTracks = [];
+      if (streams.length === 1) audioTracks = streams[0].getAudioTracks();
+      else if (streams.length > 1) {
+        const ac = new AudioContext();
+        const dest = ac.createMediaStreamDestination();
+        for (const s of streams) ac.createMediaStreamSource(s).connect(dest);
+        this.cleanup.push(() => ac.close());
+        audioTracks = dest.stream.getAudioTracks();
+      }
+      const mix = new MediaStream([...v.getVideoTracks(), ...audioTracks]);
+      const mime = Recorder.mime(audioTracks.length > 0, format);
+      const opts = { videoBitsPerSecond: bitrate };
+      if (mime) opts.mimeType = mime;
+      if (audioTracks.length) opts.audioBitsPerSecond = 192000;
+      const mr = new MediaRecorder(mix, opts);
+      this.bps = bitrate + (audioTracks.length ? 192000 : 0);
+      mr.ondataavailable = ev => this.onData(ev);
+      mr.onstop = () => this.finish();
+      mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 0); };
+      this.mr = mr;
+      this.mime = mr.mimeType || mime || 'video/webm';
+      this.streaming = /webm/i.test(this.mime);
+      this.hasAudio = audioTracks.length > 0;
+    } catch (e) {
+      this.mr = null; this.release(); this.state = 'idle';
+      throw e;
     }
-    const mix = new MediaStream([...v.getVideoTracks(), ...audioTracks]);
-    const mime = Recorder.mime(audioTracks.length > 0);
-    const opts = { videoBitsPerSecond: bitrate };
-    if (mime) opts.mimeType = mime;
-    if (audioTracks.length) opts.audioBitsPerSecond = 192000;
-    let mr;
-    try { mr = new MediaRecorder(mix, opts); } catch (e) { this.release(); throw e; }
-    this.mime = mr.mimeType || mime || 'video/webm';
-    this.chunks = [];
-    this.mr = mr;
-    mr.ondataavailable = ev => { if (ev.data && ev.data.size) this.chunks.push(ev.data); };
-    mr.onstop = () => this.finish();
-    mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 6000); };
-    mr.start(1000);
-    this.t0 = performance.now();
-    this.hasAudio = audioTracks.length > 0;
-    if (this.onstate) this.onstate(true);
   }
-  stop() { if (this.mr && this.mr.state !== 'inactive') this.mr.stop(); }
+  /* step 2 — after the countdown */
+  begin() {
+    if (this.state !== 'ready' || !this.mr) return;
+    this.chunks = []; this.bytes = 0; this.warnedSize = false; this.discard = false; this.stopReason = null;
+    this.activeMs = 0; this.resumedAt = performance.now();
+    this.mr.start(1000);
+    this.state = 'recording';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    if (this.streaming) this.healthTimer = setTimeout(() => this.checkHealth(), 4200);
+    this.sizeTimer = setInterval(() => this.checkSize(), 1000);
+    if (this.onstate) this.onstate('recording');
+  }
+  async start(opts) { await this.prepare(opts); this.begin(); } // no countdown
+  cancel() {
+    if (this.state !== 'ready') return;
+    this.mr = null; this.release(); this.state = 'idle';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    if (this.onstate) this.onstate('idle');
+  }
+  pause() {
+    if (this.state !== 'recording') return;
+    this.mr.pause();
+    this.activeMs += performance.now() - this.resumedAt;
+    this.state = 'paused';
+    if (this.onstate) this.onstate('paused');
+  }
+  resume() {
+    if (this.state !== 'paused') return;
+    this.mr.resume();
+    this.resumedAt = performance.now();
+    this.state = 'recording';
+    if (this.onstate) this.onstate('recording');
+  }
+  stop(reason = 'user') {
+    if (this.state === 'ready') { this.cancel(); return; }
+    if (!this.active || !this.mr || this.mr.state === 'inactive') return;
+    this.stopReason = this.stopReason || reason;
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    this.stoppedAt = this.elapsed();
+    this.mr.stop();
+  }
+  elapsed() {
+    if (this.state === 'recording') return (this.activeMs + performance.now() - this.resumedAt) / 1000;
+    if (this.state === 'paused') return this.activeMs / 1000;
+    return 0;
+  }
+  onData(ev) {
+    if (!ev.data || !ev.data.size) return;
+    this.chunks.push(ev.data);
+    this.bytes += ev.data.size;
+  }
+  /* bytes held so far: counted for WebM, estimated from the bitrate (an upper bound) for MP4 */
+  size() { return this.streaming ? this.bytes : Math.round(this.elapsed() * this.bps / 8); }
+  checkSize() {
+    if (!this.active) return;
+    const n = this.size();
+    if (!this.warnedSize && n > this.maxBytes * 0.85) { this.warnedSize = true; if (this.onwarn) this.onwarn('NEAR_LIMIT'); }
+    if (n >= this.maxBytes) this.stop('limit');
+  }
+  /* some encoder/driver combinations claim support but write next to nothing: with WebM this shows within seconds */
+  checkHealth() {
+    if (this.state === 'paused') { this.healthTimer = setTimeout(() => this.checkHealth(), 2000); return; }
+    if (this.state !== 'recording') return;
+    if (this.bytes < 16 * 1024) { this.discard = true; this.stop('empty'); if (this.onwarn) this.onwarn('EMPTY'); }
+  }
   release() { for (const f of this.cleanup.splice(0)) { try { f(); } catch (e) { /* ignore */ } } }
   finish() {
     const type = String(this.mime).split(';')[0] || 'video/webm';
-    const blob = new Blob(this.chunks, { type });
-    this.chunks = []; this.mr = null;
-    this.release();
-    if (this.onstate) this.onstate(false, blob, type);
+    let blob = this.discard ? null : new Blob(this.chunks, { type });
+    let reason = this.stopReason || 'user';
+    // an MP4 that comes back nearly empty after several seconds: same failure, found at the end
+    const empty = blob && blob.size < 16 * 1024 && (this.stoppedAt || 0) >= 3;
+    if (empty) { blob = null; reason = 'empty'; }
+    this.chunks = []; this.mr = null; this.discard = false; this.stopReason = null; this.stoppedAt = 0;
+    this.state = 'idle';
+    clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
+    this.release(); // stops the microphone / screen share so the browser's recording indicator goes away
+    if (this.onstate) this.onstate('idle', blob, type, reason);
+    if (empty && this.onwarn) this.onwarn('EMPTY');
   }
-  elapsed() { return this.active ? (performance.now() - this.t0) / 1000 : 0; }
 }

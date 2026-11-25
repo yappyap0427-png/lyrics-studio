@@ -2,14 +2,31 @@
 const FONT_SANS = '"Outfit", "Noto Sans TC", "Noto Sans SC", "Noto Sans CJK TC", "Microsoft JhengHei", "PingFang TC", "Heiti TC", sans-serif';
 const FONT_SERIF = '"Fraunces", "Noto Serif TC", "Noto Serif SC", "Noto Serif CJK TC", "PMingLiU", "Songti TC", serif';
 
+/* every visual difference between styles lives here, so a new style is one new entry */
 const THEMES = {
-  flow:   { label: '流光', kind: 'sans',  weight: 800, inA: [0.27, 0.36], unA: 0.40, glow: 0.7,  soft: 0.5, dim: 0.30, vignette: 0.5,  grain: 0.055, sat: 1.55, blur: 7, ink: [255, 255, 255] },
-  serif:  { label: '明體', kind: 'serif', weight: 600, inA: [0.20, 0.27], unA: 0.30, glow: 0.22, soft: 2.4, dim: 0.42, vignette: 0.62, grain: 0.09,  sat: 1.12, blur: 9, ink: [255, 244, 228] },
-  cinema: { label: '電影', kind: 'sans',  weight: 500, inA: [0.3, 0.3],   unA: 1,    glow: 0,    soft: 0,   dim: 0.34, vignette: 0.75, grain: 0.12,  sat: 1.05, blur: 4, ink: [255, 255, 255] },
+  flow: {
+    label: '流光', desc: '封面顏色流動，唱到哪亮到哪', mode: 'scroll', font: 'sans', weight: 800,
+    size: [60, 68], gapK: 0.62, rowK: 1.2, align: null, inactiveScale: 0.955,
+    inA: [0.27, 0.36], unA: 0.40, glow: 0.7, softBehind: 0.45,
+    dim: 0.30, vignette: 0.5, grain: 0.055, grainFps: 0, sat: 1.55, blur: 7, kenBurns: false, credit: false, ink: [255, 255, 255],
+  },
+  serif: {
+    label: '明體', desc: '襯線字置中，比較安靜', mode: 'scroll', font: 'serif', weight: 600,
+    size: [54, 62], gapK: 0.95, rowK: 1.4, align: 'center', inactiveScale: 0.97,
+    inA: [0.20, 0.27], unA: 0.30, glow: 0.22, softBehind: 1.4,
+    dim: 0.42, vignette: 0.62, grain: 0.09, grainFps: 0, sat: 1.12, blur: 9, kenBurns: false, credit: false, ink: [255, 244, 228],
+  },
+  cinema: {
+    label: '電影', desc: '上下黑邊，一次一行字幕', mode: 'subtitle', font: 'sans', weight: 500,
+    size: [46, 56], gapK: 0.62, rowK: 1.32, align: 'center', inactiveScale: 1,
+    inA: [0.3, 0.3], unA: 1, glow: 0, softBehind: 0,
+    dim: 0.34, vignette: 0.75, grain: 0.12, grainFps: 24, sat: 1.05, blur: 4, kenBurns: true, credit: true, ink: [255, 255, 255],
+  },
 };
 const THEME_ORDER = ['flow', 'serif', 'cinema'];
+const famOf = T => (T.font === 'serif' ? FONT_SERIF : FONT_SANS);
 
-const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
+const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
 const CLOSE_PUNCT = /^[，。！？、；：）」』】》〉…,.!?;:)\]’”]/;
 
 function tokenize(text) {
@@ -58,17 +75,18 @@ class Renderer {
     this.c = canvas;
     this.x = canvas.getContext('2d', { alpha: false });
     this.theme = 'flow';
-    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true };
+    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true };
     this.track = null;
-    this.artImg = null; this.artSmall = null; this.artCrop = null; this.artAlpha = 0; this.artTok = 0;
+    this.artImg = null; this.artSmall = null; this.artMid = null; this.artCrop = null; this.artAlpha = 0; this.artTok = 0;
     this.palette = Palette.fromString('Lyrics Studio');
     this.lyr = { status: 'idle', entries: [], plain: [], note: '', hint: '' };
-    this.anim = 0; this.artScale = 1; this.bgFade = 1; this.prevBg = null;
+    this.anim = 0; this.artScale = 1; this.bgFade = 1; this.prevBg = null; this.bgAcc = 0; this.bgDirty = true;
     this.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.perfLow = false; this.ft = 1 / 60; this.slowFor = 0; this.warm = 0;
-    this.grain = this.makeGrain(128); this.grainPat = null; this.grainTick = 0; this.grainOff = [0, 0];
+    this.grain = this.makeGrain(128); this.grainPat = null; this.grainCtx = null;
     this.cine = { cur: -2, prev: -2, t0: 0 };
-    this.snap = true;
+    this.mcache = new Map(); this.fontSeen = new Map();
+    this.snap = true; this.curLine = '';
     this.resize(canvas.width, canvas.height);
   }
   get T() { return THEMES[this.theme]; }
@@ -87,15 +105,18 @@ class Renderer {
     const land = W >= H;
     const bw = land ? 160 : Math.round(160 * W / H), bh = land ? Math.round(160 * H / W) : 160;
     this.bgS = makeCanvas(bw, bh); this.bgB = makeCanvas(bw, bh);
-    this.prevBg = null; this.bgFade = 1;
+    this.bgFull = makeCanvas(W, H); this.grainCtx = null;
+    this.prevBg = null; this.bgFade = 1; this.bgDirty = true;
     this.layoutDirty = true; this.snap = true;
   }
   setTheme(name) {
     if (!THEMES[name]) name = 'flow';
-    this.theme = name; this.layoutDirty = true; this.snap = true; this.cine.cur = -2;
+    if (name === this.theme && !this.layoutDirty) return;
+    this.theme = name; this.layoutDirty = true; this.snap = true; this.bgDirty = true; this.cine.cur = -2;
     this.preloadFonts();
   }
   setOpts(o) { Object.assign(this.opts, o); this.layoutDirty = true; this.snap = true; }
+  fontsChanged() { this.mcache.clear(); this.layoutDirty = true; }
 
   /* ---------- track + art ---------- */
   setTrack(track) {
@@ -127,7 +148,7 @@ class Renderer {
     if (!this.bgB) return;
     const { c, ctx } = makeCanvas(this.bgB.c.width, this.bgB.c.height);
     ctx.drawImage(this.bgB.c, 0, 0);
-    this.prevBg = c; this.bgFade = 0;
+    this.prevBg = c; this.bgFade = 0; this.bgDirty = true;
   }
   useArt(img) {
     const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
@@ -151,6 +172,7 @@ class Renderer {
     const a = this.palette.avg || [80, 80, 80];
     const lum = (0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]) / 255;
     this.dimExtra = clamp((lum - 0.26) * 0.85, 0, 0.32); // bright covers get a darker backdrop so text keeps contrast
+    this.bgDirty = true;
     if (this.onPalette) this.onPalette(this.palette);
   }
 
@@ -159,31 +181,38 @@ class Renderer {
     this.layoutDirty = true; this.snap = true; this.cine.cur = -2; this.plainY = null;
     this.preloadFonts();
   }
-  /* web fonts load per character range; ask for the ones these lyrics need, then re-measure */
+  /* web fonts load per character range: ask only for characters not requested before, then re-measure */
   preloadFonts() {
     if (!document.fonts || !document.fonts.load) return;
-    const T = this.T, fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const T = this.T, fam = famOf(T);
     const txt = (this.lyr.entries || []).map(e => (e.text || '') + (e.sub || '')).join('') + (this.lyr.plain || []).join('') +
       (this.track ? this.track.title + this.track.artist : '') + '正在找歌詞找不到同步純音樂等待播放0123456789:';
-    const sample = Array.from(new Set(Array.from(txt))).join('').slice(0, 3000);
-    Promise.all([
-      document.fonts.load(`${T.weight} 48px ${fam}`, sample),
-      document.fonts.load(`700 48px ${fam}`, sample),
-      document.fonts.load(`500 48px ${FONT_SANS}`, sample),
-    ]).then(() => { this.layoutDirty = true; }).catch(() => {});
+    const chars = Array.from(new Set(Array.from(txt)));
+    const jobs = [];
+    for (const f of [`${T.weight} 48px ${fam}`, `700 48px ${fam}`, `500 48px ${FONT_SANS}`]) {
+      let seen = this.fontSeen.get(f);
+      if (!seen) this.fontSeen.set(f, (seen = new Set()));
+      const fresh = chars.filter(c => !seen.has(c));
+      if (!fresh.length) continue;
+      fresh.forEach(c => seen.add(c));
+      jobs.push(document.fonts.load(f, fresh.join('').slice(0, 3000)));
+    }
+    if (jobs.length) Promise.all(jobs).then(() => this.fontsChanged()).catch(() => {});
   }
 
   /* ---------- geometry ---------- */
   geom() {
-    const { W, H } = this;
+    const T = this.T, { W, H } = this;
     const ar = W / H, land = ar >= 1.25, u = Math.min(W, H) / 1080, s = this.opts.scale || 1;
     const g = { W, H, u, land };
-    if (this.theme === 'cinema') {
+    g.font = T.size[land ? 0 : 1] * u * s;
+    g.gap = g.font * T.gapK;
+    g.rowH = g.font * T.rowK;
+    if (T.mode === 'subtitle') {
       g.bar = land ? Math.max(0, (H - W / 2.39) / 2) : 0;
-      g.font = (land ? 46 : 56) * u * s;
       g.subY = land ? H - g.bar - 120 * u : H * 0.74;
       g.maxW = land ? W * 0.7 : W * 0.84;
-      g.cx = W / 2;
+      g.cx = W / 2; g.lw = g.maxW; g.lx = (W - g.maxW) / 2; g.align = 'center';
       return g;
     }
     const info = this.opts.showInfo;
@@ -204,28 +233,34 @@ class Renderer {
       g.bottom = H * 0.95;
       g.anchor = g.top + (g.bottom - g.top) * (info ? 0.3 : 0.36);
     }
-    const base = this.theme === 'serif' ? (land ? 54 : 62) : (land ? 60 : 68);
-    g.font = base * u * s;
-    g.gap = g.font * (this.theme === 'serif' ? 0.95 : 0.62);
-    g.rowH = g.font * (this.theme === 'serif' ? 1.4 : 1.2);
-    g.align = this.opts.align === 'auto' ? (this.theme === 'serif' || !land ? 'center' : 'left') : this.opts.align;
+    g.align = this.opts.align === 'auto' ? (T.align || (land ? 'left' : 'center')) : this.opts.align;
     g.cx = g.lx + g.lw / 2;
     return g;
   }
-  mainFont(px) { const T = this.T; return `${T.weight} ${px.toFixed(1)}px ${T.kind === 'serif' ? FONT_SERIF : FONT_SANS}`; }
-  subFont(px) { return `500 ${px.toFixed(1)}px ${this.T.kind === 'serif' ? FONT_SERIF : FONT_SANS}`; }
+  mainFont(px) { const T = this.T; return `${T.weight} ${px.toFixed(1)}px ${famOf(T)}`; }
+  subFont(px) { return `500 ${px.toFixed(1)}px ${famOf(this.T)}`; }
 
+  /* measureText is the slow part of layout; widths only change when the font does */
+  measure(s) {
+    const key = this.x.font + '\u0001' + s;
+    let w = this.mcache.get(key);
+    if (w === undefined) {
+      w = this.x.measureText(s).width;
+      if (this.mcache.size > 40000) this.mcache.clear();
+      this.mcache.set(key, w);
+    }
+    return w;
+  }
   wrap(text, maxW) {
-    const x = this.x;
     const toks = tokenize(text);
     const run = lim => {
       const rows = [];
       let cur = '', w = 0;
       for (let tk of toks) {
-        const tw = x.measureText(tk).width;
+        const tw = this.measure(tk);
         if (tw > lim && tk.trim().length > 1) { // a single word wider than the line: break it
           for (const ch of Array.from(tk)) {
-            const cw = x.measureText(ch).width;
+            const cw = this.measure(ch);
             if (cur.trim() && w + cw > lim) { rows.push(cur); cur = ''; w = 0; }
             cur += ch; w += cw;
           }
@@ -234,7 +269,7 @@ class Renderer {
         if (cur.trim() && w + tw > lim && !CLOSE_PUNCT.test(tk)) {
           rows.push(cur);
           tk = tk.replace(/^\s+/, '');
-          cur = tk; w = x.measureText(tk).width;
+          cur = tk; w = this.measure(tk);
         } else { cur += tk; w += tw; }
       }
       if (cur.trim()) rows.push(cur);
@@ -242,7 +277,7 @@ class Renderer {
     };
     let rows = run(maxW);
     if (rows.length > 1) { // balance rows so the last one isn't a lonely word
-      const total = rows.reduce((a, r) => a + x.measureText(r.trim()).width, 0);
+      const total = rows.reduce((a, r) => a + this.measure(r.trim()), 0);
       let lim = (total / rows.length) * 1.06;
       for (let k = 0; k < 8 && lim < maxW; k++) {
         const alt = run(lim);
@@ -250,14 +285,14 @@ class Renderer {
         lim *= 1.05;
       }
     }
-    return rows.map(r => { const t = r.trim(); return { text: t, chars: Array.from(t), w: x.measureText(t).width }; });
+    return rows.map(r => { const t = r.trim(); return { text: t, chars: Array.from(t), w: this.measure(t) }; });
   }
 
   layout() {
     const g = (this.g = this.geom());
     const x = this.x;
     const E = this.lyr.entries || [];
-    if (this.theme !== 'cinema') {
+    if (this.T.mode === 'scroll') {
       const subPx = g.font * 0.5;
       for (const e of E) {
         const prev = e.L || {};
@@ -292,12 +327,11 @@ class Renderer {
     x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none';
     x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetX = 0; x.shadowOffsetY = 0;
     this.drawBackground(dt);
-    if (this.theme === 'cinema') this.drawCinema(songT, lyricT, dt);
+    if (this.T.mode === 'subtitle') this.drawCinema(songT, lyricT, dt);
     else {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
       this.drawLyrics(lyricT, dt);
     }
-    this.drawGrain(dt);
     this.monitor(dt);
   }
   monitor(dt) {
@@ -310,8 +344,20 @@ class Renderer {
     } else this.slowFor = Math.max(0, this.slowFor - dt);
   }
 
+  /* the backdrop moves slowly, so it is rebuilt off-screen ~30 times a second (24 for film grain)
+     and each frame only copies it */
   drawBackground(dt) {
-    const x = this.x, W = this.W, H = this.H, T = this.T, P = this.palette;
+    const T = this.T;
+    this.bgAcc += dt;
+    const step = 1 / (T.grainFps || 30);
+    if (this.bgDirty || this.bgAcc >= step) {
+      this.renderBackground(Math.min(this.bgAcc, 0.25));
+      this.bgAcc = 0; this.bgDirty = false;
+    }
+    this.x.drawImage(this.bgFull.c, 0, 0);
+  }
+  renderBackground(dt) {
+    const x = this.bgFull.ctx, W = this.W, H = this.H, T = this.T, P = this.palette;
     const S = this.bgS, B = this.bgB, sw = S.c.width, sh = S.c.height, sx = S.ctx;
     const tt = this.anim * (this.reduced ? 0.2 : 1);
     sx.globalAlpha = 1; sx.globalCompositeOperation = 'source-over';
@@ -348,6 +394,7 @@ class Renderer {
     bx.drawImage(S.c, -m, -m, sw + 2 * m, sh + 2 * m);
     bx.filter = 'none';
 
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
     x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
     x.drawImage(B.c, 0, 0, W, H);
     if (this.prevBg && this.bgFade < 1) {
@@ -357,21 +404,21 @@ class Renderer {
       x.globalAlpha = 1;
       if (this.bgFade >= 1) this.prevBg = null;
     }
-    if (this.theme === 'cinema') { // the cover itself, slowly drifting like a film still
+    if (T.kenBurns) { // the cover itself, slowly drifting like a film still
       if (this.prevArtMid) {
         this.prevArtA -= dt / 1.1;
-        if (this.prevArtA <= 0) this.prevArtMid = null; else this.kenBurns(this.prevArtMid, this.prevArtA);
+        if (this.prevArtA <= 0) this.prevArtMid = null; else this.kenBurns(x, this.prevArtMid, this.prevArtA);
       }
-      if (this.artMid && this.artAlpha > 0.01) this.kenBurns(this.artMid, this.artAlpha);
+      if (this.artMid && this.artAlpha > 0.01) this.kenBurns(x, this.artMid, this.artAlpha);
     }
     x.fillStyle = `rgba(0,0,0,${clamp(T.dim + (this.dimExtra || 0), 0, 0.8)})`; x.fillRect(0, 0, W, H);
     const vg = x.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(0,0,0,${T.vignette})`);
     x.fillStyle = vg; x.fillRect(0, 0, W, H);
+    this.grainOn(x);
   }
-
-  kenBurns(img, alpha) {
-    const x = this.x, W = this.W, H = this.H;
+  kenBurns(x, img, alpha) {
+    const W = this.W, H = this.H;
     const tt = this.anim * (this.reduced ? 0.15 : 1);
     const zoom = 1.12 + 0.05 * Math.sin(tt * 0.045);
     const s = Math.max(W, H) * zoom;
@@ -382,20 +429,16 @@ class Renderer {
     x.drawImage(img, cx - s / 2, cy - s / 2, s, s);
     x.restore();
   }
-
-  drawGrain(dt) {
-    const x = this.x, T = this.T;
+  grainOn(x) {
+    const T = this.T;
     if (!T.grain) return;
-    if (!this.grainPat) this.grainPat = x.createPattern(this.grain, 'repeat');
-    if (this.theme === 'cinema' && !this.reduced) { // film grain refreshes at ~24 fps
-      this.grainTick += dt;
-      if (this.grainTick > 1 / 24) { this.grainTick = 0; this.grainOff = [(Math.random() * 128) | 0, (Math.random() * 128) | 0]; }
-    } else this.grainOff = [0, 0];
+    if (this.grainCtx !== x) { this.grainPat = x.createPattern(this.grain, 'repeat'); this.grainCtx = x; }
+    const ox = T.grainFps && !this.reduced ? (Math.random() * 128) | 0 : 0, oy = T.grainFps && !this.reduced ? (Math.random() * 128) | 0 : 0;
     x.save();
     x.globalAlpha = T.grain; x.globalCompositeOperation = 'overlay';
-    x.translate(-this.grainOff[0], -this.grainOff[1]);
+    x.translate(-ox, -oy);
     x.fillStyle = this.grainPat;
-    x.fillRect(this.grainOff[0], this.grainOff[1], this.W, this.H);
+    x.fillRect(ox, oy, this.W, this.H);
     x.restore();
   }
 
@@ -431,7 +474,7 @@ class Renderer {
     x.restore();
     if (!tr) return;
 
-    const fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const fam = famOf(T);
     const dur = tr.duration || 0, pos = clamp(songT, 0, dur || Math.max(0, songT));
     x.save();
     x.textAlign = 'left'; x.textBaseline = 'alphabetic';
@@ -466,10 +509,11 @@ class Renderer {
 
   /* ---------- scrolling lyrics (流光 / 明體) ---------- */
   drawLyrics(t, dt) {
-    const g = this.g, E = this.lyr.entries;
-    if (this.lyr.status !== 'synced' || !E.length) { this.drawLyricState(t, dt); return; }
+    const g = this.g, E = this.lyr.entries, T = this.T;
+    if (this.lyr.status !== 'synced' || !E.length) { this.curLine = ''; this.drawLyricState(t, dt); return; }
     let ai = LRC.activeIndex(E, t);
     if (ai > 0 && E[ai].type === 'gap' && !E[ai].show) ai--; // short breath: keep the last line lit
+    this.curLine = ai >= 0 && E[ai].type === 'line' ? E[ai].text : '';
     const focus = Math.max(0, ai);
     const snap = this.snap; this.snap = false;
     for (let i = 0; i < E.length; i++) {
@@ -493,7 +537,7 @@ class Renderer {
       L.y = L.y == null || snap ? target : approach(L.y, target, dt, k0 / (1 + d * 0.11)); // farther lines trail a little
       const act = i === ai ? 1 : 0;
       L.lv = snap ? act : approach(L.lv || 0, act, dt, act ? 7 : 4.5);
-      const ts = act ? 1 : this.theme === 'serif' ? 0.97 : 0.955;
+      const ts = act ? 1 : T.inactiveScale;
       L.s = L.s == null || snap ? ts : approach(L.s, ts, dt, 6);
     }
     const fadeLen = (g.bottom - g.top) * 0.16;
@@ -510,13 +554,24 @@ class Renderer {
       this.drawLine(e, L, i, ai, t, fade, blur);
     }
   }
+  /* which lyric line is under a point on the canvas (for click-to-jump) */
+  hitLine(px, py) {
+    if (this.T.mode !== 'scroll' || this.lyr.status !== 'synced' || !this.g) return -1;
+    const g = this.g, E = this.lyr.entries;
+    if (px < g.lx - g.font * 0.5 || px > g.lx + g.lw + g.font * 0.5 || py < g.top || py > g.bottom) return -1;
+    for (let i = 0; i < E.length; i++) {
+      const e = E[i], L = e.L;
+      if (!L || e.type !== 'line' || L.y == null) continue;
+      if (py >= L.y - g.gap / 2 && py <= L.y + L.h + g.gap / 2) return i;
+    }
+    return -1;
+  }
 
   charX(r, n) {
-    const x = this.x;
-    if (!r.pre || r.preFont !== x.font) {
+    if (!r.pre || r.preFont !== this.x.font) {
       r.pre = [0];
-      for (let k = 1; k <= r.chars.length; k++) r.pre.push(x.measureText(r.chars.slice(0, k).join('')).width);
-      r.preFont = x.font;
+      for (let k = 1; k <= r.chars.length; k++) r.pre.push(this.measure(r.chars.slice(0, k).join('')));
+      r.preFont = this.x.font;
     }
     const k = Math.floor(n), f = n - k;
     if (k >= r.chars.length) return r.pre[r.chars.length];
@@ -543,7 +598,8 @@ class Renderer {
     const y0 = L.y;
     const karaoke = this.opts.karaoke && lv > 0.002;
     const P = karaoke ? this.progressChars(e, t) : 0;
-    const soft = g.font * T.soft;
+    /* the lit edge eases in behind the sung position and never reaches ahead of it */
+    const behind = g.font * T.softBehind, ahead = g.font * 0.1;
     x.save();
     x.globalAlpha = alpha;
     x.translate(ox, y0); x.scale(L.s, L.s); x.translate(-ox, -y0);
@@ -553,16 +609,16 @@ class Renderer {
     for (const r of L.rows) {
       const rx = g.align === 'center' ? g.cx - r.w / 2 : g.lx;
       const n = karaoke ? rowFill(r, P) : 0;
-      let fx = null; // x where the fill fades into the unsung part
-      if (karaoke && n > 0 && n < r.chars.length) fx = rx - soft + (this.charX(r, n) / Math.max(1, r.w)) * (r.w + 2 * soft);
       const lit = !karaoke ? 1 : n >= r.chars.length ? 1 : n <= 0 ? 0 : -1; // -1 = partly sung
+      let g0 = 0, g1 = 0;
+      if (lit === -1) { const px = rx + this.charX(r, n); g0 = px - behind; g1 = px + ahead; }
       if (T.glow && lv > 0.02 && lit !== 0) {
         x.save();
         x.filter = `blur(${(16 * u).toFixed(1)}px)`;
         x.globalAlpha = alpha * T.glow * lv;
         if (lit === 1) x.fillStyle = rgba(this.palette.accent, 1);
         else {
-          const gg = x.createLinearGradient(fx - soft, 0, fx + soft, 0);
+          const gg = x.createLinearGradient(g0, 0, g1, 0);
           gg.addColorStop(0, rgba(this.palette.accent, 1)); gg.addColorStop(1, rgba(this.palette.accent, 0));
           x.fillStyle = gg;
         }
@@ -574,7 +630,7 @@ class Renderer {
       else if (lit === 1) x.fillStyle = rgba(col, fiA);
       else if (lit === 0) x.fillStyle = rgba(col, unA);
       else {
-        const gr = x.createLinearGradient(fx - soft, 0, fx + soft, 0);
+        const gr = x.createLinearGradient(g0, 0, g1, 0);
         gr.addColorStop(0, rgba(col, fiA)); gr.addColorStop(1, rgba(col, unA));
         x.fillStyle = gr;
       }
@@ -612,11 +668,11 @@ class Renderer {
   }
 
   stateText() {
-    const st = this.lyr.status;
-    switch (st) {
+    switch (this.lyr.status) {
       case 'loading': return ['正在找歌詞', ''];
       case 'notfound': return ['找不到同步歌詞', '按 L 手動搜尋，或把 LRC 檔拖進視窗'];
       case 'instrumental': return ['純音樂', '這首歌沒有歌詞'];
+      case 'off': return ['這首不顯示歌詞', '按 L 可以改回自動配對'];
       case 'error': return ['歌詞載入失敗', this.lyr.note || '按 L 重新搜尋'];
       default: return [this.lyr.note || '等待播放', this.lyr.hint || ''];
     }
@@ -625,7 +681,7 @@ class Renderer {
     if (this.lyr.status === 'plain') { this.drawPlain(t, dt); return; }
     const x = this.x, g = this.g, T = this.T;
     const [title, hint] = this.stateText();
-    const fam = T.kind === 'serif' ? FONT_SERIF : FONT_SANS;
+    const fam = famOf(T);
     const cx = g.align === 'center' ? g.cx : g.lx;
     const pulse = this.lyr.status === 'loading' ? 0.55 + 0.35 * Math.sin(this.anim * 3) : 0.92;
     x.save();
@@ -676,9 +732,9 @@ class Renderer {
     return e.C;
   }
   drawCinema(songT, t, dt) {
-    const x = this.x, g = this.g, W = this.W, H = this.H, u = g.u, tr = this.track;
+    const x = this.x, g = this.g, W = this.W, H = this.H, u = g.u, tr = this.track, T = this.T;
     if (g.bar > 0) { x.fillStyle = '#000'; x.fillRect(0, 0, W, Math.ceil(g.bar)); x.fillRect(0, Math.floor(H - g.bar), W, Math.ceil(g.bar)); }
-    if (tr) { // opening credit for the first seconds of the song
+    if (tr && T.credit && this.opts.credit !== false) { // opening credit for the first seconds of the song
       const ca = clamp((songT - 0.6) / 1.4, 0, 1) * clamp((8 - songT) / 1.6, 0, 1);
       if (ca > 0.005) {
         x.save();
@@ -694,6 +750,7 @@ class Renderer {
     }
     const st = this.lyr.status, E = this.lyr.entries;
     if (st !== 'synced' || !E.length) {
+      this.curLine = '';
       const msg = st === 'plain' ? '這首只有未同步的歌詞，換成流光或明體風格來看' : this.stateText()[0];
       x.save();
       x.font = `500 ${(g.font * 0.62).toFixed(1)}px ${FONT_SANS}`; x.textAlign = 'center'; x.textBaseline = 'middle';
@@ -704,6 +761,7 @@ class Renderer {
     }
     let ai = LRC.activeIndex(E, t);
     if (ai >= 0 && E[ai].type === 'gap') ai = E[ai].show ? -1 : ai - 1;
+    this.curLine = ai >= 0 && E[ai].type === 'line' ? E[ai].text : '';
     const C = this.cine;
     if (ai !== C.cur) { C.prev = C.cur; C.cur = ai; C.t0 = this.anim; }
     const ef = easeOut(clamp((this.anim - C.t0) / 0.5, 0, 1));
@@ -718,7 +776,7 @@ class Renderer {
       const total = c.rows.length * rh + (c.sub.length ? fs * 0.12 + c.sub.length * srh : 0);
       let y = g.subY - total / 2 + rh / 2 + dy;
       x.globalAlpha = a;
-      x.font = `${this.T.weight} ${fs.toFixed(1)}px ${FONT_SANS}`; x.fillStyle = '#fff';
+      x.font = `${T.weight} ${fs.toFixed(1)}px ${FONT_SANS}`; x.fillStyle = '#fff';
       for (const r of c.rows) { x.fillText(r.text, g.cx - r.w / 2, y); y += rh; }
       if (c.sub.length) {
         y += fs * 0.12 - rh / 2 + srh / 2;

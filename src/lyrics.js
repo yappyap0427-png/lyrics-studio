@@ -1,23 +1,25 @@
 /* ---------- LRCLIB client (free synced-lyrics database, CORS enabled) ---------- */
 const Lyrics = (() => {
   const API = 'https://lrclib.net/api';
-  const CLIENT = 'LyricsStudio/1.0 (personal lyrics player)';
+  const CLIENT = 'LyricsStudio/1.1 (personal lyrics player)';
+  const DISK_KEY = 'lyricsCache', DISK_MAX = 40, DISK_DAYS = 30, MISS_HOURS = 24;
   let headerOk = true, last = 0, blockedUntil = 0;
-  const cache = new Map();
+  const mem = new Map();
+  const api = { timeoutMs: 10000 };
 
-  async function call(path) {
+  async function call(path, signal) {
     const now = performance.now();
     if (now < blockedUntil) await sleep(blockedUntil - now);
-    const wait = last + 300 - performance.now(); // requests one at a time, gently spaced
+    const wait = last + 300 - performance.now(); // one request at a time, gently spaced
     if (wait > 0) await sleep(wait);
     last = performance.now();
     let res;
     try {
-      res = await fetch(API + path, headerOk ? { headers: { 'Lrclib-Client': CLIENT } } : undefined);
+      res = await fetchT(API + path, headerOk ? { headers: { 'Lrclib-Client': CLIENT }, signal } : { signal }, api.timeoutMs);
     } catch (e) {
-      if (!headerOk) throw e;
+      if (!headerOk || e.name !== 'TypeError') throw e; // timeouts and cancels are not header problems
       headerOk = false; // custom header refused by the CORS preflight: retry without it
-      res = await fetch(API + path);
+      res = await fetchT(API + path, { signal }, api.timeoutMs);
     }
     if (res.status === 429) {
       const ra = parseFloat(res.headers.get('Retry-After')) || 10;
@@ -26,8 +28,8 @@ const Lyrics = (() => {
     }
     return res;
   }
-  async function json(path) {
-    const r = await call(path);
+  async function json(path, signal) {
+    const r = await call(path, signal);
     if (r.status === 404) return null;
     if (!r.ok) throw new Error('HTTP_' + r.status);
     const ct = r.headers.get('content-type') || '';
@@ -35,9 +37,33 @@ const Lyrics = (() => {
     return r.json();
   }
   const qs = o => Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
-  const get = p => json('/get?' + qs(p));
-  const search = p => json('/search?' + qs(p)).then(r => (Array.isArray(r) ? r : []));
-  const byId = id => json('/get/' + encodeURIComponent(id));
+  const get = (p, signal) => json('/get?' + qs(p), signal);
+  const search = (p, signal) => json('/search?' + qs(p), signal).then(r => (Array.isArray(r) ? r : []));
+  const byId = (id, signal) => json('/get/' + encodeURIComponent(id), signal);
+
+  /* found lyrics survive a reload: a small least-recently-used store in localStorage */
+  const slim = r => r && { id: r.id, trackName: r.trackName || r.name, artistName: r.artistName, albumName: r.albumName, duration: r.duration, instrumental: !!r.instrumental, syncedLyrics: r.syncedLyrics || null, plainLyrics: r.plainLyrics || null };
+  function diskGet(key) {
+    const all = Store.get(DISK_KEY, {});
+    const hit = all[key];
+    if (!hit) return undefined;
+    const age = Date.now() - hit.at;
+    if (age > (hit.r ? DISK_DAYS * 864e5 : MISS_HOURS * 36e5)) return undefined;
+    return hit.r; // null = "looked recently, nothing there"
+  }
+  function diskPut(key, r) {
+    const all = Store.get(DISK_KEY, {});
+    all[key] = { r: slim(r), at: Date.now() };
+    const keys = Object.keys(all).sort((a, b) => all[b].at - all[a].at);
+    for (const k of keys.slice(DISK_MAX)) delete all[k];
+    if (!Store.set(DISK_KEY, all)) { Store.del(DISK_KEY); Store.set(DISK_KEY, { [key]: all[key] }); }
+  }
+  function remember(key, r) { mem.set(key, r); diskPut(key, r); }
+  function forget(key) {
+    mem.delete(key);
+    const all = Store.get(DISK_KEY, {});
+    if (all[key]) { delete all[key]; Store.set(DISK_KEY, all); }
+  }
 
   function cleanTitle(s) {
     return String(s || '')
@@ -69,37 +95,43 @@ const Lyrics = (() => {
   }
   const usable = r => r && (r.syncedLyrics || r.instrumental);
 
-  async function find(t, { force = false } = {}) {
-    if (!force && cache.has(t.key)) return cache.get(t.key);
+  async function find(t, { force = false, signal } = {}) {
     const manual = Store.get('lyricsPick.' + t.key, null);
+    if (manual === 'none') return { none: true };
+    if (!force && mem.has(t.key)) return mem.get(t.key);
+    if (!force) { const d = diskGet(t.key); if (d !== undefined && (!manual || (d && d.id === manual))) { mem.set(t.key, d); return d; } }
     if (manual) {
-      try { const r = await byId(manual); if (r) { cache.set(t.key, r); return r; } } catch (e) { if (e.message === 'RATE_LIMIT') throw e; }
+      try { const r = await byId(manual, signal); if (r) { remember(t.key, r); return r; } }
+      catch (e) { if (e.message === 'RATE_LIMIT' || e.name === 'AbortError' || e.code === 'TIMEOUT') throw e; }
     }
     const artist0 = firstArtist(t.artist);
     const dur = t.duration ? Math.round(t.duration) : undefined;
     let rec = null, plain = null;
-    const soft = async fn => { try { return await fn(); } catch (e) { if (e.message === 'RATE_LIMIT') throw e; return null; } };
+    const soft = async fn => {
+      try { return await fn(); }
+      catch (e) { if (e.message === 'RATE_LIMIT' || e.name === 'AbortError' || e.code === 'TIMEOUT') throw e; return null; }
+    };
 
     if (t.title && artist0) {
-      const r = await soft(() => get({ track_name: t.title, artist_name: artist0, album_name: t.album, duration: dur }));
+      const r = await soft(() => get({ track_name: t.title, artist_name: artist0, album_name: t.album, duration: dur }, signal));
       if (usable(r)) rec = r; else if (r && r.plainLyrics) plain = r;
       const ct = cleanTitle(t.title);
       if (!rec && (ct !== t.title || t.album)) {
-        const r2 = await soft(() => get({ track_name: ct, artist_name: artist0, duration: dur }));
+        const r2 = await soft(() => get({ track_name: ct, artist_name: artist0, duration: dur }, signal));
         if (usable(r2)) rec = r2; else if (r2 && r2.plainLyrics) plain = plain || r2;
       }
     }
     if (!rec && t.title) {
       const lists = [];
-      lists.push(...((await soft(() => search({ track_name: cleanTitle(t.title), artist_name: artist0 || undefined }))) || []));
-      if (!lists.some(r => r.syncedLyrics)) lists.push(...((await soft(() => search({ q: [cleanTitle(t.title), artist0].filter(Boolean).join(' ') }))) || []));
-      if (!lists.some(r => r.syncedLyrics) && artist0) lists.push(...((await soft(() => search({ q: cleanTitle(t.title) }))) || []));
+      lists.push(...((await soft(() => search({ track_name: cleanTitle(t.title), artist_name: artist0 || undefined }, signal))) || []));
+      if (!lists.some(r => r.syncedLyrics)) lists.push(...((await soft(() => search({ q: [cleanTitle(t.title), artist0].filter(Boolean).join(' ') }, signal))) || []));
+      if (!lists.some(r => r.syncedLyrics) && artist0) lists.push(...((await soft(() => search({ q: cleanTitle(t.title) }, signal))) || []));
       rec = best(lists.filter(usable), t);
       if (!rec) plain = plain || best(lists.filter(r => r.plainLyrics), t);
     }
     const result = rec || plain || null;
-    cache.set(t.key, result);
+    remember(t.key, result);
     return result;
   }
-  return { find, search, byId, cleanTitle, score, clearCache: k => cache.delete(k) };
+  return Object.assign(api, { find, search, byId, cleanTitle, score, remember, clearCache: forget });
 })();

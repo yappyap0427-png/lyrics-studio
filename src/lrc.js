@@ -134,6 +134,19 @@ const LRC = (() => {
     return ans;
   }
 
-  return { parse, buildTimeline, activeIndex, estimate };
+  /* what an imported file holds: synced lines, plain text, nothing, or not text at all */
+  function inspect(text) {
+    const s = String(text || '');
+    if (!s.trim()) return { kind: 'empty', lines: 0 };
+    const control = (s.match(/[\u0000-\u0008\u000E-\u001F]/g) || []).length;
+    const broken = (s.match(/�/g) || []).length;
+    if (control > 3 || broken > Math.max(3, s.length * 0.05)) return { kind: 'binary', lines: 0 };
+    const synced = parse(s).lines.filter(l => l.text).length;
+    if (synced) return { kind: 'synced', lines: synced };
+    const plain = s.replace(/\r/g, '').split('\n').filter(l => l.trim() && !/^\s*\[[a-z#]+:.*\]\s*$/i.test(l)).length;
+    return plain ? { kind: 'plain', lines: plain } : { kind: 'empty', lines: 0 };
+  }
+
+  return { parse, buildTimeline, activeIndex, estimate, inspect };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = LRC;
