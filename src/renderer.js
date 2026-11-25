@@ -22,8 +22,14 @@ const THEMES = {
     inA: [0.3, 0.3], unA: 1, glow: 0, softBehind: 0,
     dim: 0.34, vignette: 0.75, grain: 0.12, grainFps: 24, sat: 1.05, blur: 4, kenBurns: true, credit: true, ink: [255, 255, 255],
   },
+  ktv: {
+    label: 'KTV', desc: '下方兩行輪流，唱過的字變色', mode: 'ktv', font: 'sans', weight: 800,
+    size: [76, 66], gapK: 0.62, rowK: 1.2, align: null, inactiveScale: 1,
+    inA: [1, 1], unA: 1, glow: 0, softBehind: 0,
+    dim: 0.36, vignette: 0.55, grain: 0.04, grainFps: 0, sat: 1.4, blur: 7, kenBurns: false, credit: false, ink: [255, 255, 255],
+  },
 };
-const THEME_ORDER = ['flow', 'serif', 'cinema'];
+const THEME_ORDER = ['flow', 'serif', 'cinema', 'ktv'];
 const famOf = T => (T.font === 'serif' ? FONT_SERIF : FONT_SANS);
 
 const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
@@ -58,6 +64,33 @@ function rowFill(r, P) {
   if (P >= m[m.length - 1] + 1) return m.length;
   for (let j = 0; j < m.length; j++) if (P < m[j] + 1) return j + Math.max(0, P - m[j]);
   return m.length;
+}
+/* KTV: two rows, lines alternate between them, and each verse starts on the top row after a break.
+   A line shows up when the line before it starts (a verse's first two lines a few seconds early, with count-in dots)
+   and leaves when the line two after it shows up. One item per sung line. */
+function ktvSchedule(E, lead = 3.5) {
+  const out = [];
+  E.forEach((e, i) => {
+    if (e.type !== 'line') return;
+    const prev = out[out.length - 1];
+    const brk = !prev || e.time - prev.fillEnd >= 3.5;
+    out.push({ i, row: brk ? 0 : 1 - prev.row, brk, time: e.time, fillEnd: e.fillEnd, appear: 0, hide: 0, dots: false });
+  });
+  for (let k = 0; k < out.length; k++) {
+    const o = out[k], p = out[k - 1];
+    if (o.brk) {
+      o.appear = Math.max(p ? p.fillEnd + 0.6 : 0, o.time - lead, 0);
+      o.dots = o.time - o.appear >= 1.6;
+    } else o.appear = p.brk ? p.appear : p.time;
+  }
+  for (let k = 0; k < out.length; k++) {
+    const o = out[k], n1 = out[k + 1], n2 = out[k + 2];
+    const same1 = n1 && !n1.brk, same2 = same1 && n2 && !n2.brk;
+    let hide = same2 ? n2.appear : same1 ? Math.max(o.fillEnd + 0.8, n1.time + 0.4) : o.fillEnd + 1.2;
+    for (let j = k + 1; j < out.length; j++) if (out[j].row === o.row) { hide = Math.min(hide, out[j].appear); break; }
+    o.hide = Math.max(hide, o.appear + 0.3);
+  }
+  return out;
 }
 function charTimes(words) {
   const st = [], en = [];
@@ -208,10 +241,26 @@ class Renderer {
     g.font = T.size[land ? 0 : 1] * u * s;
     g.gap = g.font * T.gapK;
     g.rowH = g.font * T.rowK;
+    if (T.mode === 'ktv') {
+      const tall = ar < 0.8;
+      g.font = (tall ? T.size[1] * W / 1080 : T.size[0] * u) * s;
+      g.padL = W * (tall ? 0.07 : 0.1); g.padR = W * (tall ? 0.14 : 0.1); // tall: keep clear of the buttons down the right side of Reels / TikTok
+      g.maxW = W - g.padL - g.padR;
+      g.rowGap = g.font * 1.42;
+      g.rowY = tall ? [H * 0.58, H * 0.58 + g.rowGap] : [H * 0.82 - g.rowGap, H * 0.82];
+      g.header = true;
+      g.artSize = (tall ? 190 : 150) * u;
+      g.artX = tall ? W * 0.075 : W * 0.06; g.artY = tall ? Math.max(150 * u, H * 0.13) : H * 0.08;
+      g.infoX = g.artX + g.artSize + 34 * u; g.infoW = tall ? W - g.infoX - W * 0.075 : W * 0.36;
+      if (!tall) { g.progX = g.infoX; g.progW = g.infoW; g.progY = g.artY + g.artSize * 0.44 + 82 * u; }
+      g.lx = g.padL; g.lw = W - g.padL - g.padR; g.cx = W / 2; g.align = 'left';
+      g.top = H * 0.3; g.bottom = tall ? H * 0.8 : H * 0.95; g.anchor = g.rowY[0];
+      return g;
+    }
     if (T.mode === 'subtitle') {
       g.bar = land ? Math.max(0, (H - W / 2.39) / 2) : 0;
-      g.subY = land ? H - g.bar - 120 * u : H * 0.74;
-      g.maxW = land ? W * 0.7 : W * 0.84;
+      g.subY = land ? H - g.bar - 120 * u : H * (ar < 0.8 ? 0.68 : 0.74); // tall: clear of the bottom of Reels / TikTok
+      g.maxW = land ? W * 0.7 : W * (ar < 0.8 ? 0.78 : 0.84);
       g.cx = W / 2; g.lw = g.maxW; g.lx = (W - g.maxW) / 2; g.align = 'center';
       return g;
     }
@@ -226,11 +275,12 @@ class Renderer {
       const tall = ar < 0.8;
       g.header = true;
       g.artSize = (tall ? 190 : 150) * u;
-      g.artX = W * 0.075; g.artY = (tall ? 150 : 72) * u;
+      // tall frames keep clear of the top and bottom bands that Reels / TikTok / Shorts cover with their buttons
+      g.artX = W * 0.075; g.artY = tall ? Math.max(150 * u, H * 0.13) : 72 * u;
       g.infoX = g.artX + g.artSize + 34 * u; g.infoW = W - g.infoX - W * 0.075;
-      g.lx = W * 0.075; g.lw = W * 0.85;
-      g.top = info ? g.artY + g.artSize + 120 * u : H * 0.08;
-      g.bottom = H * 0.95;
+      g.lx = W * (tall ? 0.09 : 0.075); g.lw = W * (tall ? 0.82 : 0.85);
+      g.top = info ? g.artY + g.artSize + 120 * u : H * (tall ? 0.14 : 0.08);
+      g.bottom = H * (tall ? 0.78 : 0.95);
       g.anchor = g.top + (g.bottom - g.top) * (info ? 0.3 : 0.36);
     }
     g.align = this.opts.align === 'auto' ? (T.align || (land ? 'left' : 'center')) : this.opts.align;
@@ -311,6 +361,23 @@ class Renderer {
         x.font = this.mainFont(g.font * 0.7);
         this.plainRows = (this.lyr.plain || []).map(t => (t.trim() ? this.wrap(t.trim(), g.lw) : []));
       }
+    } else if (this.T.mode === 'ktv') {
+      for (const e of E) {
+        e.C = null;
+        if (e.type !== 'line') continue;
+        let px = g.font;
+        x.font = this.mainFont(px);
+        const w = this.measure(e.text);
+        if (w > g.maxW) { px = Math.max(g.font * 0.62, px * g.maxW / w); x.font = this.mainFont(px); } // shrink a long line before wrapping it
+        const rows = this.wrap(e.text, g.maxW);
+        const tc = Array.from(e.text);
+        mapRows(rows, tc);
+        const subPx = px * 0.46;
+        let subRows = [];
+        if (e.sub) { x.font = this.subFont(subPx); subRows = this.wrap(e.sub.replace(/\n/g, ' / '), g.maxW); }
+        e.K = { px, rows, subRows, subPx, textLen: tc.length, charT: e.words ? charTimes(e.words) : null };
+      }
+      this.ktvPlan = ktvSchedule(E);
     } else {
       for (const e of E) e.C = null;
     }
@@ -328,7 +395,10 @@ class Renderer {
     x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetX = 0; x.shadowOffsetY = 0;
     this.drawBackground(dt);
     if (this.T.mode === 'subtitle') this.drawCinema(songT, lyricT, dt);
-    else {
+    else if (this.T.mode === 'ktv') {
+      if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
+      this.drawKtv(songT, lyricT, dt);
+    } else {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
       this.drawLyrics(lyricT, dt);
     }
@@ -493,7 +563,7 @@ class Renderer {
       y += 48 * u;
       x.font = `500 ${(28 * u).toFixed(1)}px ${fam}`; x.fillStyle = 'rgba(255,255,255,0.64)';
       x.fillText(ellipsize(x, tr.artist, g.infoW), g.infoX, y);
-      this.drawProgress(g.lx, g.artY + g.artSize + 42 * u, g.lw, u, pos, dur);
+      this.drawProgress(g.progX != null ? g.progX : g.lx, g.progY != null ? g.progY : g.artY + g.artSize + 42 * u, g.progW != null ? g.progW : g.lw, u, pos, dur);
     }
     x.restore();
   }
@@ -577,8 +647,7 @@ class Renderer {
     if (k >= r.chars.length) return r.pre[r.chars.length];
     return r.pre[k] + (r.pre[k + 1] - r.pre[k]) * f;
   }
-  progressChars(e, t) {
-    const L = e.L;
+  progressChars(e, t, L = e.L) {
     if (L.charT) {
       const { st, en } = L.charT;
       if (!st.length || t < st[0]) return 0;
@@ -716,6 +785,100 @@ class Renderer {
       }
       y += gp;
     }
+    x.restore();
+  }
+
+  /* ---------- KTV: two rows at the bottom, outlined text, sung characters change colour ---------- */
+  ktvColor() {
+    const a = this.palette.accent;
+    if (this._kc && this._kcFor === a) return this._kc;
+    const [h, sat, l] = rgbToHsl(a[0], a[1], a[2]);
+    this._kcFor = a;
+    this._kc = rgba(hslToRgb(h, Math.max(sat, 0.78), clamp(l, 0.5, 0.6)), 1); // vivid enough to read against white
+    return this._kc;
+  }
+  ktvText(r, rx, y, px, nfill) {
+    const x = this.x;
+    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(8,10,24,0.92)';
+    x.strokeText(r.text, rx, y);
+    x.fillStyle = '#fff'; x.fillText(r.text, rx, y);
+    if (nfill <= 0) return;
+    const edge = rx + this.charX(r, nfill);
+    x.save();
+    x.beginPath(); x.rect(rx - px, y - px * 1.2, edge - rx + px, px * 2.4); x.clip();
+    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(255,255,255,0.96)'; x.strokeText(r.text, rx, y);
+    x.fillStyle = this.ktvColor(); x.fillText(r.text, rx, y);
+    x.restore();
+  }
+  drawKtv(songT, t, dt) {
+    const x = this.x, g = this.g, W = this.W, H = this.H, E = this.lyr.entries, st = this.lyr.status;
+    const top = g.rowY[0] - g.font * 1.9;
+    const shade = x.createLinearGradient(0, top, 0, H); // a soft shade keeps the rows readable on any cover
+    shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(0.5, 'rgba(0,0,0,0.26)'); shade.addColorStop(1, 'rgba(0,0,0,0.42)');
+    x.fillStyle = shade; x.fillRect(0, top, W, H - top);
+    x.save();
+    x.textBaseline = 'middle'; x.textAlign = 'left'; x.lineJoin = 'round'; x.miterLimit = 2;
+    const center = (text, px, y, weight = 800) => {
+      x.font = `${weight} ${px.toFixed(1)}px ${FONT_SANS}`;
+      const s = ellipsize(x, text, g.lw), w = this.measure(s);
+      this.ktvText({ text: s, chars: Array.from(s) }, W / 2 - w / 2, y, px, 0);
+    };
+    if (st !== 'synced' || !E.length) {
+      this.curLine = '';
+      const msg = st === 'plain' ? '這首只有未同步的歌詞，換成流光或明體風格來看' : this.stateText()[0];
+      x.globalAlpha = st === 'loading' ? 0.55 + 0.35 * Math.sin(this.anim * 3) : 0.9;
+      center(msg, g.font * 0.6, (g.rowY[0] + g.rowY[1]) / 2, 700);
+      x.restore();
+      return;
+    }
+    const plan = this.ktvPlan || [];
+    const first = plan[0];
+    if (first && this.track && t < first.appear && first.appear >= 2.5) { // intro: song title, like a KTV title card
+      x.globalAlpha = clamp((t - 0.3) / 0.9, 0, 1) * clamp((first.appear - 0.2 - t) / 0.6, 0, 1);
+      if (x.globalAlpha > 0.01) {
+        center(this.track.title, g.font * 1.05, g.rowY[0]);
+        if (this.track.artist) center(this.track.artist, g.font * 0.5, g.rowY[1], 600);
+      }
+    }
+    let cur = '';
+    for (const o of plan) {
+      if (t < o.appear || t > o.hide) continue;
+      const e = E[o.i], K = e.K;
+      if (!K) continue;
+      if (t >= e.time && t < e.end) cur = e.text;
+      x.globalAlpha = clamp((t - o.appear) / 0.12, 0, 1) * clamp((o.hide - t) / 0.12, 0, 1);
+      const sung = this.opts.karaoke ? this.progressChars(e, t, K) : t >= e.time ? K.textLen : 0;
+      const rh = K.px * 1.16, n = K.rows.length;
+      const subH = K.subRows.length ? K.px * 0.18 + K.subRows.length * K.subPx * 1.3 : 0;
+      let y = o.row === 0 ? g.rowY[0] - (n - 1) * rh - subH : g.rowY[1];
+      x.font = this.mainFont(K.px);
+      const firstX = o.row === 0 ? g.padL : W - g.padR - K.rows[0].w;
+      if (o.dots && t < o.time) { // count-in: four dots, one goes out every 0.8 s
+        const nd = Math.min(4, Math.ceil((o.time - t) / 0.8)), r = K.px * 0.11, sp = K.px * 0.38;
+        for (let k = 0; k < nd; k++) {
+          x.beginPath(); x.arc(firstX + r + k * sp, y - K.px * 0.86, r, 0, Math.PI * 2);
+          x.fillStyle = this.ktvColor(); x.fill();
+          x.lineWidth = r * 0.45; x.strokeStyle = 'rgba(255,255,255,0.9)'; x.stroke();
+        }
+      }
+      for (const r of K.rows) {
+        const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
+        this.ktvText(r, rx, y, K.px, rowFill(r, sung));
+        y += rh;
+      }
+      if (subH) {
+        x.font = this.subFont(K.subPx);
+        y += K.px * 0.18 - rh / 2 + K.subPx * 0.65;
+        for (const r of K.subRows) {
+          const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
+          x.lineWidth = K.subPx * 0.18; x.strokeStyle = 'rgba(8,10,24,0.85)'; x.strokeText(r.text, rx, y);
+          x.fillStyle = 'rgba(255,255,255,0.9)'; x.fillText(r.text, rx, y);
+          y += K.subPx * 1.3;
+        }
+        x.font = this.mainFont(K.px);
+      }
+    }
+    this.curLine = cur;
     x.restore();
   }
 

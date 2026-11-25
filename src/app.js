@@ -16,7 +16,9 @@ const App = {
       source: 'demo', theme: 'flow', layout: 'fit', offset: 0,
       karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true,
       recAudio: 'none', recFps: 60, recQuality: 'high', recAutoStop: true, recCountdown: true, recFormat: 'auto',
+      recRange: 'all', clipTall: false, safeArea: true, kVol: 1, kEcho: 0.3, kRev: 0.35, ytShuffle: false, ytLoop: false,
     }, Store.get('settings', {}));
+    if (!this.S.recOnChange) this.S.recOnChange = this.S.recAutoStop === false ? 'keep' : 'stop'; // older setting: a yes/no checkbox
     if (!LAYOUTS.includes(this.S.layout)) this.S.layout = 'fit';
     if (!THEMES[this.S.theme]) this.S.theme = 'flow';
     this.canvas = $('#stage');
@@ -28,9 +30,17 @@ const App = {
     this.r.setTheme(this.S.theme);
     this.r.setOpts(this.viewOpts());
     this.rec = new Recorder(this.canvas);
-    this.rec.onstate = (st, blob, type, reason) => this.onRecState(st, blob, type, reason);
+    this.rec.onstate = (st, blob, type, reason, meta) => this.onRecState(st, blob, type, reason, meta);
     this.rec.onwarn = code => this.onRecWarn(code);
+    this.rec.onsegment = (blob, type, meta, reason) => this.onRecSegment(blob, type, meta, reason);
+    this.mic = new KaraokeMic();
+    Object.assign(this.mic, { vol: this.S.kVol, echo: this.S.kEcho, reverb: this.S.kRev });
+    this.mic.onchange = () => this.syncKaraokeUI();
+    this.mic.onlevel = rms => { const el = $('#kLevel'); if (el) el.style.transform = `scaleX(${Math.min(1, rms * 5).toFixed(3)})`; };
+    this.mic.onfeedback = () => toast('偵測到回授聲（聲音從喇叭繞回麥克風），已關掉耳機監聽。戴上耳機後再打開。', 0);
+    this.recDir = null; this.clip = null; this.segNo = 0;
     this.sources = { spotify: new SpotifySource(this), youtube: new YouTubeSource(this), demo: new DemoSource(this) };
+    this.sources.youtube.shuffle = !!this.S.ytShuffle; this.sources.youtube.loop = !!this.S.ytLoop;
     this.bindUI();
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -60,6 +70,7 @@ const App = {
     this.last = now;
     const songT = this.track ? this.clock.now(now) : 0;
     this.r.draw(songT, songT - this.S.offset, dt, this.clock.playing);
+    if (this.clip) this.clipStep(songT);
     if (this.rec.active) {
       const s = fmtTime(this.rec.elapsed());
       if (this.recShown !== s) { this.recShown = s; $('#recTime').textContent = s; if (this.rec.streaming) $('#recBytes').textContent = (this.rec.bytes / 1048576).toFixed(1) + ' MB'; }
@@ -93,7 +104,15 @@ const App = {
   onPlayback(track, pos, playing, ts = performance.now()) {
     this.idleKey = null;
     if (!this.track || this.track.key !== track.key) {
-      if (this.rec.active && this.S.recAutoStop && this.track) { this.rec.stop('ended'); toast('換歌了，已停止錄影'); }
+      if (this.clip && this.clip.key !== track.key) {
+        if (this.rec.busy) this.rec.stop('clip');
+        this.clip = null;
+        toast('換歌了，片段錄影停在這裡', 5000);
+      } else if (this.rec.active && this.track) {
+        const mode = this.S.recOnChange;
+        if (mode === 'stop') { this.rec.stop('ended'); toast('換歌了，已停止錄影'); }
+        else if (mode === 'split' && !this.rec.split({ track })) { this.rec.stop('ended'); toast('沒辦法接著錄下一首，已停止並存檔', 6000); }
+      }
       this.track = track;
       this.clock.sync(pos, playing, ts, true);
       this.r.setTrack(track);
@@ -101,7 +120,7 @@ const App = {
       this.loadLyrics(track);
     } else {
       const pred = this.clock.now(ts);
-      if (this.rec.active && this.S.recAutoStop && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop('ended'); toast('歌曲播完，已停止錄影'); }
+      if (this.rec.active && !this.clip && this.S.recOnChange === 'stop' && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop('ended'); toast('歌曲播完，已停止錄影'); }
       this.clock.sync(pos, playing, ts);
       if (track.duration && !this.track.duration) this.track.duration = track.duration;
     }
@@ -117,7 +136,61 @@ const App = {
     this.r.setLyrics({ status: 'idle', note: info.title, hint: info.hint || '' });
     if (info.status) this.setStatus(info.status);
   },
+  /* the last song finished and nothing follows */
+  onEnded() {
+    if (this.rec.active && !this.clip && this.S.recOnChange !== 'keep') { this.rec.stop('ended'); toast('播完了，已停止錄影'); }
+  },
   setStatus(text) { if (text !== this.statusText) { this.statusText = text; $('#status').textContent = text; } },
+  nextTrack() { if (this.src && this.src.next) this.src.next(); },
+  prevTrack() { if (this.src && this.src.prev) this.src.prev(); },
+
+  /* ---------- playlist (YouTube) ---------- */
+  onQueueChange() { if ($('#dlgQueue').open) this.renderQueue(); },
+  openQueue() {
+    const y = this.sources.youtube;
+    if (this.S.source !== 'youtube' || !y.isList()) { toast('在 YouTube 視窗貼上歌單連結，或一行貼一個連結，就會有播放清單', 6000); return; }
+    this.renderQueue();
+    $('#dlgQueue').showModal();
+    const cur = $('#qList [aria-current]');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+    const info = y.queueInfo();
+    y.fetchTitles(info.ids.filter(id => !y.titleOf(id)).slice(0, 200), () => { if ($('#dlgQueue').open) this.renderQueue(); });
+  },
+  renderQueue() {
+    const y = this.sources.youtube, info = y.queueInfo(), ol = $('#qList');
+    $('#qCount').textContent = `${info.ids.length} 首`;
+    $('#qShuffle').setAttribute('aria-pressed', String(info.shuffle));
+    $('#qLoop').setAttribute('aria-pressed', String(info.loop));
+    $('#qNote').textContent = info.kind === 'list' ? '這是 YouTube 上的歌單。移除或加歌之後，會變成你自己的清單。' : '';
+    const had = ol.querySelector(':focus') ? ol.querySelector(':focus').closest('li') : null;
+    const focusId = had ? had.dataset.id + ':' + (had.querySelector('.qx:focus') ? 'x' : 'b') : null;
+    ol.replaceChildren(...info.ids.map((id, i) => {
+      const li = document.createElement('li');
+      li.dataset.id = id;
+      if (i === info.index) li.setAttribute('aria-current', 'true');
+      const t = y.titleOf(id);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'qitem';
+      const img = document.createElement('img');
+      img.alt = ''; img.loading = 'lazy'; img.width = 64; img.height = 36; img.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+      const num = document.createElement('span'); num.className = 'qn'; num.textContent = String(i + 1);
+      const meta = document.createElement('span'); meta.className = 'qm';
+      const tt = document.createElement('b'); tt.textContent = t ? t.title : `第 ${i + 1} 首`;
+      const ar = document.createElement('small'); ar.textContent = t ? t.artist : '還沒播到，播放後會顯示歌名';
+      meta.append(tt, ar);
+      b.append(num, img, meta);
+      b.setAttribute('aria-label', `${i + 1}. ${t ? t.title + '，' + t.artist : '第 ' + (i + 1) + ' 首'}${i === info.index ? '（正在播放）' : ''}`);
+      b.onclick = () => y.playAt(i);
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'qx'; x.textContent = '×';
+      x.setAttribute('aria-label', `從清單移除第 ${i + 1} 首`);
+      x.onclick = () => { y.removeAt(i); setTimeout(() => this.renderQueue(), 400); };
+      if (info.ids.length < 3) x.disabled = true;
+      li.append(b, x);
+      return li;
+    }));
+    if (focusId) { const [id, which] = focusId.split(':'); const li = ol.querySelector(`li[data-id="${id}"]`); if (li) (which === 'x' ? li.querySelector('.qx') : li.querySelector('.qitem')).focus(); }
+  },
   seekTo(t) { if (this.src && this.src.canSeek && this.src.seekTo) this.src.seekTo(t); },
 
   /* ---------- lyrics ---------- */
@@ -207,7 +280,8 @@ const App = {
     this.r.setLyrics({ status: 'idle', note: '等待播放' });
     this.clock.sync(0, false, performance.now(), true);
     $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === name)));
-    this.scrubShown = null;
+    this.scrubShown = null; this.queueShown = null;
+    if (this.clip) { if (this.rec.busy) this.rec.stop('clip'); this.clip = null; }
     this.src = this.sources[name];
     this.src.start();
     if (name === 'spotify' && !this.sources.spotify.token) this.openSpotify();
@@ -241,7 +315,13 @@ const App = {
       : prob ? 'Spotify 只接受 https 或 127.0.0.1 網址。請改用線上版，或用 start.bat 開啟。' : '';
     $('#dlgSpotify').showModal();
   },
-  openYoutube() { $('#ytUrl').value = Store.get('yt.last', ''); $('#dlgYoutube').showModal(); setTimeout(() => $('#ytUrl').select(), 30); },
+  openYoutube(add = false) {
+    const y = this.sources.youtube;
+    $('#ytAdd').hidden = !(this.S.source === 'youtube' && y.track);
+    $('#ytUrl').value = add ? '' : Store.get('yt.last', '');
+    $('#dlgYoutube').showModal();
+    setTimeout(() => $('#ytUrl').select(), 30);
+  },
   openSearch() {
     const t = this.track;
     $('#q').value = t ? [Lyrics.cleanTitle(t.title), String(t.artist || '').split(',')[0]].join(' ').trim() : '';
@@ -322,48 +402,120 @@ const App = {
   /* ---------- recording ---------- */
   openRec() {
     if (this.rec.active) { this.rec.stop(); return; }
-    if (this.rec.busy) { this.cancelCountdown(); return; }
+    if (this.rec.busy) { if (this.clip) this.rec.stop('clip'); else this.cancelCountdown(); return; }
     const f = $('#recForm');
     f.aud.value = this.S.recAudio;
     $('#recFps').value = String(this.S.recFps);
     $('#recQ').value = this.S.recQuality;
     $('#recFmt').value = this.S.recFormat;
-    $('#recAuto').checked = !!this.S.recAutoStop;
+    $('#recOnChange').value = this.S.recOnChange;
     $('#recCd').checked = !!this.S.recCountdown;
-    $('#recSize').textContent = `${this.canvas.width} × ${this.canvas.height}`;
-    this.updateRecHint();
+    $('#clipTall').checked = !!this.S.clipTall;
+    $('#recDirRow').hidden = !window.showDirectoryPicker;
+    $('#recDirName').textContent = this.recDir ? this.recDir.name : '下載資料夾';
+    const canClip = !!(this.track && this.r.lyr.status === 'synced' && this.r.lyr.entries.some(e => e.type === 'line'));
+    f.range.value = canClip && this.S.recRange === 'clip' ? 'clip' : 'all';
+    $('#recRange').querySelector('input[value=clip]').disabled = !canClip;
+    if (canClip) this.fillClipLines();
+    this.updateRecForm();
     $('#dlgRec').showModal();
   },
+  /* the two lists of lines for a clip, starting on the suggested chorus */
+  fillClipLines() {
+    const E = this.r.lyr.entries, off = this.S.offset;
+    const opts = [];
+    E.forEach((e, i) => { if (e.type === 'line') opts.push([i, `${fmtTime(Math.max(0, e.time + off))}  ${e.text}`]); });
+    const mk = sel => sel.replaceChildren(...opts.map(([i, label]) => { const o = document.createElement('option'); o.value = String(i); o.textContent = label; return o; }));
+    mk($('#clipFrom')); mk($('#clipTo'));
+    const sug = (this.track && this.clipPick && this.clipPick.key === this.track.key) ? this.clipPick : LRC.suggestClip(E, 30);
+    if (sug) { $('#clipFrom').value = String(sug.from); $('#clipTo').value = String(sug.to); }
+  },
+  clipRange() {
+    const E = this.r.lyr.entries, i = +$('#clipFrom').value, j = Math.max(i, +$('#clipTo').value), off = this.S.offset;
+    if (!E[i] || !E[j]) return null;
+    const from = Math.max(0, E[i].time + off - 1.0); // a second of lead-in so the first word is not clipped
+    const to = Math.min(E[j].end, E[j].fillEnd + 1.2) + off;
+    return { i, j, from, to };
+  },
+  updateRecForm() {
+    const f = $('#recForm'), clip = f.range.value === 'clip';
+    $('#clipBox').hidden = !clip;
+    $('#recFlow').hidden = clip; $('#recCdRow').hidden = clip;
+    if (clip) {
+      if (+$('#clipTo').value < +$('#clipFrom').value) $('#clipTo').value = $('#clipFrom').value;
+      const r = this.clipRange();
+      const src = this.src;
+      $('#clipInfo').textContent = !r ? '' : `長度 ${fmtTime(r.to - r.from)}，前面多留 1 秒。` +
+        (src && src.canSeek ? '按開始後會跳到這段前面，播到結尾自動停止。' : 'Spotify 不能從這裡跳轉，播到這段時會自動開始錄。');
+    }
+    this.updateRecHint();
+  },
   updateRecHint() {
-    const aud = $('#recForm').aud.value, src = this.S.source;
+    const f = $('#recForm'), aud = f.aud.value, src = this.S.source;
     const lines = [];
     if (aud === 'system' || aud === 'both') {
       if (src === 'spotify') lines.push('按開始後會跳出分享視窗：選「整個螢幕」，並打開「同時分享系統音訊」。');
       else if (src === 'demo') lines.push('示範曲本身沒有聲音，錄出來會是靜音。');
       else lines.push('按開始後會跳出分享視窗：選「這個分頁」，並打開「同時分享分頁音訊」。');
     }
-    if (aud === 'mic' || aud === 'both') lines.push('戴耳機錄，麥克風才不會收到喇叭的聲音。');
+    if (aud === 'mic' || aud === 'both') lines.push(this.mic.on ? '會錄到卡拉 OK 麥克風加了回音的人聲。' : '戴耳機錄，麥克風才不會收到喇叭的聲音。');
     if (aud === 'none') lines.push('只錄畫面，之後可以在剪輯軟體配上音樂。');
-    if (this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先把比例切到 9:16。');
+    if (f.range.value !== 'clip' && this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先把比例切到 9:16。');
+    if (f.range.value !== 'clip' && $('#recOnChange').value === 'split' && !this.recDir) lines.push('每首存一個檔時，瀏覽器可能會問要不要允許這個網站下載多個檔案，請按允許。');
     lines.push('切到其他分頁也會繼續錄，不過留在這個分頁畫面最順。');
     $('#recHint').textContent = lines.join(' ');
   },
   startRec(ev) {
     ev.preventDefault();
-    const f = $('#recForm');
+    const f = $('#recForm'), clip = f.range.value === 'clip';
     Object.assign(this.S, {
       recAudio: f.aud.value, recFps: parseInt($('#recFps').value, 10) || 60, recQuality: $('#recQ').value,
-      recFormat: $('#recFmt').value, recAutoStop: $('#recAuto').checked, recCountdown: $('#recCd').checked,
+      recFormat: $('#recFmt').value, recOnChange: $('#recOnChange').value, recCountdown: $('#recCd').checked,
+      recRange: clip ? 'clip' : 'all', clipTall: $('#clipTall').checked,
     });
+    this.S.recAutoStop = this.S.recOnChange !== 'keep';
     this.save();
     $('#dlgRec').close();
-    this.rec.prepare({
-      audio: this.S.recAudio, fps: this.S.recFps, bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
-      preferTab: this.S.source !== 'spotify', format: this.S.recFormat,
-    })
+    if (clip) { this.startClip(); return; }
+    this.segNo = 0;
+    this.rec.prepare(this.recOptions())
       .then(() => this.countdown(this.S.recCountdown ? 3 : 0))
-      .then(go => { if (go) this.rec.begin(); else { this.rec.cancel(); toast('已取消錄影'); } })
+      .then(go => { if (go) this.rec.begin({ track: this.track }); else { this.rec.cancel(); toast('已取消錄影'); } })
       .catch(err => this.recError(err));
+  },
+  recOptions() {
+    return {
+      audio: this.S.recAudio, fps: this.S.recFps, bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
+      preferTab: this.S.source !== 'spotify', format: this.S.recFormat, micTrack: this.mic.on ? this.mic.track : null,
+    };
+  },
+  /* ---------- clip: record from one lyric line to another ---------- */
+  startClip() {
+    const r = this.clipRange(), t = this.track;
+    if (!r || !t) { toast('這首還沒有同步歌詞，不能選段落', 5000); return; }
+    this.clipPick = { key: t.key, from: r.i, to: r.j };
+    if (this.S.clipTall && this.S.layout !== '9:16') this.setLayout('9:16');
+    this.clip = { key: t.key, from: r.from, to: r.to, armed: true };
+    this.rec.prepare(this.recOptions())
+      .then(() => {
+        if (!this.clip) { this.rec.cancel(); return; }
+        document.body.classList.add('rec-wait');
+        $('#recbar').hidden = false; $('#recWait').hidden = false;
+        $('#recTime').textContent = '等待'; $('#recStop').textContent = '取消';
+        if (this.src && this.src.canSeek) { this.src.seekTo(Math.max(0, r.from - 1.5)); if (this.src.ensurePlaying) this.src.ensurePlaying(); }
+        this.startTicker(this.S.recFps || 30); // so a hidden tab still starts on time
+      })
+      .catch(err => { this.clip = null; this.recError(err); });
+  },
+  clipStep(songT) {
+    const c = this.clip, rec = this.rec;
+    if (rec.state === 'ready' && c.armed) {
+      if (songT >= c.from && songT < c.to) { c.armed = false; this.segNo = 0; rec.begin({ track: this.track, clip: true }); return; }
+      const msg = songT > c.to
+        ? `這段已經過了，把歌拉回 ${fmtTime(Math.max(0, c.from - 2))} 之前`
+        : `${fmtTime(c.from)} 開始錄（還有 ${Math.max(1, Math.ceil(c.from - songT))} 秒）`;
+      if (msg !== this.waitMsg) { this.waitMsg = msg; $('#recWait').textContent = msg; }
+    } else if (rec.active && songT >= c.to) rec.stop('clip');
   },
   recError(err) {
     const code = (err && (err.code || err.name)) || '';
@@ -390,25 +542,59 @@ const App = {
     });
   },
   cancelCountdown() { if (this.cdCancel) this.cdCancel(); },
-  onRecState(st, blob, type, reason) {
+  onRecState(st, blob, type, reason, meta) {
     const on = st === 'recording' || st === 'paused';
     document.body.classList.toggle('recording', on);
     document.body.classList.toggle('rec-paused', st === 'paused');
-    $('#recbar').hidden = !on;
+    document.body.classList.remove('rec-wait');
+    $('#recbar').hidden = !on; $('#recWait').hidden = true; this.waitMsg = '';
+    $('#recStop').textContent = '停止錄影';
     $('#btnRec .lbl').textContent = on ? '停止' : '錄影';
     $('#btnLayout').disabled = on;
     $('#recPause').textContent = st === 'paused' ? '繼續' : '暫停';
     $('#recBytes').hidden = !this.rec.streaming; // MP4 is only handed over at the end, so there is no running size to show
     this.recShown = '';
+    this.updateSafe();
     if (on) { this.startTicker(this.S.recFps || 30); return; }
+    const wasClip = !!(meta && meta.clip);
+    this.clip = null;
     this.stopTicker();
     this.resize();
     if (!blob) return;
     if (blob.size < 2000) { toast('錄到的檔案是空的', 0); return; }
+    const split = !wasClip && this.S.recOnChange === 'split' && this.segNo > 0;
+    const name = this.recName(meta, type, wasClip ? '片段' : '', split ? ++this.segNo : 0);
+    this.saveRecording(blob, name).then(where => {
+      const pre = reason === 'limit' ? '到了容量上限，已自動停止。' : wasClip ? '片段錄好了。' : '';
+      toast(pre + `已存成 ${where}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+    });
+  },
+  /* one song of a "one file per song" recording is done */
+  onRecSegment(blob, type, meta, reason) {
+    if (!blob) return; // too short to keep (a skipped song), or empty (already explained)
+    const n = ++this.segNo;
+    this.saveRecording(blob, this.recName(meta, type, '', n)).then(where => toast(`第 ${n} 首存好了：${where}`, 4500));
+  },
+  recName(meta, type, tag, n) {
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
-    const name = `${safeName(this.track ? this.track.title : 'lyrics')}-${stamp()}.${ext}`;
+    const t = (meta && meta.track) || this.track;
+    return `${n ? String(n).padStart(2, '0') + '-' : ''}${safeName(t ? t.title : 'lyrics')}${tag ? '-' + tag : ''}-${stamp()}.${ext}`;
+  },
+  /* into the folder picked in the record dialog (Chrome / Edge), otherwise a normal download */
+  async saveRecording(blob, name) {
+    if (this.recDir) {
+      try { const n = await writeToDir(this.recDir, name, blob); return `${this.recDir.name}/${n}`; }
+      catch (e) { this.recDir = null; toast('寫不進選的資料夾，改用下載', 5000); }
+    }
     downloadBlob(blob, name);
-    toast((reason === 'limit' ? '到了容量上限，已自動停止。' : '') + `已存成 ${name}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+    return name;
+  },
+  async pickRecDir() {
+    try {
+      this.recDir = await window.showDirectoryPicker({ id: 'lyrics-studio-rec', mode: 'readwrite', startIn: 'videos' });
+      $('#recDirName').textContent = this.recDir.name;
+      this.updateRecHint();
+    } catch (e) { if (e && e.name !== 'AbortError') toast('沒辦法使用這個資料夾：' + (e.message || e.name), 6000); }
   },
   onRecWarn(code) {
     if (code === 'EMPTY') {
@@ -424,6 +610,42 @@ const App = {
     }
   },
 
+  /* ---------- karaoke ---------- */
+  openKaraoke() { this.syncKaraokeUI(); $('#dlgKaraoke').showModal(); },
+  syncKaraokeUI() {
+    const m = this.mic;
+    $('#kOn').textContent = m.on ? '關閉麥克風' : '打開麥克風';
+    $('#kOn').className = m.on ? 'ghost' : 'primary';
+    $('#kMon').disabled = !m.on; $('#kMon').checked = m.monitor;
+    $('#kVol').value = String(this.S.kVol); $('#kEcho').value = String(this.S.kEcho); $('#kRev').value = String(this.S.kRev);
+    $('#kKtv').textContent = this.S.theme === 'ktv' ? '已是 KTV 畫面' : '換成 KTV 畫面';
+    $('#kKtv').disabled = this.S.theme === 'ktv';
+    const b = $('#btnKaraoke');
+    b.classList.toggle('on', m.on); b.setAttribute('aria-pressed', String(m.on));
+    b.dataset.tip = m.on ? (m.monitor ? '卡拉 OK：麥克風開著，耳機聽得到（K）' : '卡拉 OK：麥克風開著（K）') : '卡拉 OK（K）';
+  },
+  async toggleMic() {
+    if (this.mic.on) {
+      if (this.rec.busy && this.S.recAudio !== 'none' && this.S.recAudio !== 'system') { toast('正在錄你的聲音，停止錄影後才能關麥克風', 5000); return; }
+      this.mic.disable();
+      return;
+    }
+    try {
+      await this.mic.enable();
+      toast('麥克風開了。要聽到自己的聲音，先戴上耳機，再勾「從耳機聽自己的聲音」。', 6000);
+    } catch (e) {
+      const c = (e && (e.code || e.name)) || '';
+      toast(c === 'NotAllowedError' ? '沒有拿到麥克風權限。到網址列左邊的設定允許麥克風，再試一次。' : c === 'NotFoundError' ? '找不到麥克風，請確認已經接上' : '打不開麥克風：' + ((e && e.message) || c), 0);
+    }
+  },
+  /* where Reels / TikTok / Shorts put their own buttons and captions: shown on screen only, never recorded */
+  updateSafe() {
+    const on = this.S.safeArea && this.S.layout === '9:16' && !this.rec.active;
+    const el = $('#safe');
+    el.hidden = !on;
+    if (on) { el.style.width = this.canvas.style.width; el.style.height = this.canvas.style.height; }
+  },
+
   /* ---------- view controls ---------- */
   nudge(d) {
     this.S.offset = Math.round((this.S.offset + d) * 10) / 10;
@@ -434,6 +656,7 @@ const App = {
   setLayout(id) {
     if (this.rec.busy) { toast('錄影中不能換比例'); return false; }
     this.S.layout = id; this.save(); this.resize(); this.updateDock();
+    if (id === '9:16' && this.S.safeArea && !this.safeHinted) { this.safeHinted = true; toast('畫面上的斜線區域是短影音 App 會蓋住的地方，只是提示，不會錄進去。可以在設定關掉。', 6000); }
     return true;
   },
   cycleTheme() {
@@ -524,6 +747,7 @@ const App = {
     const s = Math.min(innerWidth / W, innerHeight / H); // same factor on both axes: never stretched
     c.style.width = Math.round(W * s) + 'px';
     c.style.height = Math.round(H * s) + 'px';
+    this.updateSafe();
   },
   applyPalette(p) {
     const st = document.documentElement.style;
@@ -539,6 +763,8 @@ const App = {
       $('#volWrap').hidden = !(src && src.hasVolume);
       if (src && src.hasVolume) $('#vol').value = String(Store.get('yt.vol', 100));
     }
+    const q = !!(show && src.hasQueue);
+    if (q !== this.queueShown) { this.queueShown = q; $('#btnPrev').hidden = $('#btnNext').hidden = $('#btnQueue').hidden = !q; }
     if (!show || this.scrubbing) return;
     const v = String(Math.round(clamp(songT / t.duration, 0, 1) * 1000));
     if (v !== this.scrubV) { this.scrubV = v; $('#seek').value = v; }
@@ -562,7 +788,29 @@ const App = {
     $('#btnLayout').onclick = ev => this.openMenu('layout', ev.currentTarget);
     $('#btnFull').onclick = () => this.toggleFull();
     $('#btnRec').onclick = () => this.openRec();
-    $('#recStop').onclick = () => this.rec.stop();
+    $('#recStop').onclick = () => { if (this.clip && this.rec.state === 'ready') toast('已取消片段錄影'); this.rec.stop(this.clip ? 'clip' : 'user'); };
+    $('#btnPrev').onclick = () => this.prevTrack();
+    $('#btnNext').onclick = () => this.nextTrack();
+    $('#btnQueue').onclick = () => this.openQueue();
+    $('#qShuffle').onclick = () => { const y = this.sources.youtube; y.setShuffle(!y.shuffle); this.S.ytShuffle = y.shuffle; this.save(); setTimeout(() => this.renderQueue(), 300); };
+    $('#qLoop').onclick = () => { const y = this.sources.youtube; y.setLoop(!y.loop); this.S.ytLoop = y.loop; this.save(); this.renderQueue(); };
+    $('#qAdd').onclick = () => { $('#dlgQueue').close(); this.openYoutube(true); };
+    $('#btnKaraoke').onclick = () => this.openKaraoke();
+    $('#kOn').onclick = async () => { await this.toggleMic(); this.syncKaraokeUI(); };
+    $('#kMon').addEventListener('change', ev => {
+      this.mic.setMonitor(ev.target.checked);
+      if (ev.target.checked) toast('請確定戴著耳機。用喇叭的話，聲音會繞回麥克風發出刺耳的回授聲。', 6000);
+    });
+    const bindMic = (id, key, name) => $(id).addEventListener('input', ev => { this.S[key] = +ev.target.value; this.mic.set(name, this.S[key]); this.save(); });
+    bindMic('#kVol', 'kVol', 'vol'); bindMic('#kEcho', 'kEcho', 'echo'); bindMic('#kRev', 'kRev', 'reverb');
+    $('#kKtv').onclick = () => { this.S.theme = 'ktv'; this.r.setTheme('ktv'); this.save(); this.updateDock(); this.syncKaraokeUI(); toast('已換成 KTV 畫面，按 T 可以換回其他風格'); };
+    $('#kRec').onclick = async () => {
+      if (!this.mic.on) { await this.toggleMic(); if (!this.mic.on) return; }
+      $('#dlgKaraoke').close();
+      this.S.recAudio = this.S.source === 'demo' ? 'mic' : 'both';
+      this.save();
+      this.openRec();
+    };
     $('#recPause').onclick = () => (this.rec.state === 'paused' ? this.rec.resume() : this.rec.pause());
     $('#cdCancel').onclick = () => this.cancelCountdown();
     $('#btnSettings').onclick = () => this.openSettings();
@@ -580,14 +828,16 @@ const App = {
       this.sources.spotify.login(id);
     };
     $('#spLogout').onclick = () => { this.sources.spotify.logout(); $('#dlgSpotify').close(); toast('已中斷 Spotify 連線'); };
-    $('#ytForm').addEventListener('submit', ev => {
-      ev.preventDefault();
+    const playYt = append => {
       const v = $('#ytUrl').value.trim();
-      if (!YouTubeSource.parseId(v)) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲網址', 5000); return; }
+      if (!YouTubeSource.parseInput(v)) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲或歌單網址', 5000); return; }
       $('#dlgYoutube').close();
       if (this.S.source !== 'youtube') this.setSource('youtube');
-      this.sources.youtube.play(v);
-    });
+      this.sources.youtube.play(v, { append });
+    };
+    $('#ytForm').addEventListener('submit', ev => { ev.preventDefault(); playYt(false); });
+    $('#ytAdd').onclick = () => playYt(true);
+    $('#ytUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $('#ytForm').requestSubmit(); } });
     $('#searchForm').addEventListener('submit', ev => { ev.preventDefault(); this.doSearch(); });
     $('#searchClose').onclick = () => $('#dlgSearch').close();
     $('#btnImport').onclick = () => $('#lrcFile').click();
@@ -601,7 +851,8 @@ const App = {
       ev.target.value = '';
     });
     $('#recForm').addEventListener('submit', ev => this.startRec(ev));
-    $('#recForm').addEventListener('change', () => this.updateRecHint());
+    $('#recForm').addEventListener('change', () => this.updateRecForm());
+    $('#recDirPick').onclick = () => this.pickRecDir();
     $('#recCancel').onclick = () => $('#dlgRec').close();
     $$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
@@ -611,6 +862,7 @@ const App = {
       if (key === 'blur' && this.S.blur) this.r.perfLow = false;
     });
     bindCheck('#setKaraoke', 'karaoke'); bindCheck('#setBlur', 'blur'); bindCheck('#setInfo', 'showInfo'); bindCheck('#setCredit', 'credit');
+    $('#setSafe').addEventListener('change', ev => { this.S.safeArea = ev.target.checked; this.save(); this.updateSafe(); });
     $('#setAlign').addEventListener('change', ev => { this.S.align = ev.target.value; this.save(); this.r.setOpts({ align: this.S.align }); });
     $('#setScale').addEventListener('input', ev => { this.S.scale = parseFloat(ev.target.value) || 1; this.save(); this.r.setOpts({ scale: this.S.scale }); $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%'; });
     $('#setOffReset').onclick = () => { this.S.offset = 0; this.save(); this.updateDock(); toast('偏移已歸零'); };
@@ -675,6 +927,7 @@ const App = {
     $('#setBlur').checked = !!this.S.blur;
     $('#setInfo').checked = !!this.S.showInfo;
     $('#setCredit').checked = !!this.S.credit;
+    $('#setSafe').checked = !!this.S.safeArea;
     $('#setAlign').value = this.S.align;
     $('#setScale').value = String(this.S.scale);
     $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%';
@@ -696,7 +949,10 @@ const App = {
       v: () => this.cycleLayout(),
       f: () => this.toggleFull(),
       r: () => this.openRec(),
-      p: () => { if (this.rec.state === 'paused') this.rec.resume(); else this.rec.pause(); },
+      p: () => { if (ev.shiftKey) this.prevTrack(); else if (this.rec.state === 'paused') this.rec.resume(); else this.rec.pause(); },
+      n: () => this.nextTrack(),
+      q: () => this.openQueue(),
+      k: () => this.openKaraoke(),
       h: () => document.body.classList.toggle('hideui'),
       ArrowLeft: () => { if (this.src && this.src.seek) this.src.seek(-5); },
       ArrowRight: () => { if (this.src && this.src.seek) this.src.seek(5); },

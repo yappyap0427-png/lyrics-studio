@@ -86,6 +86,12 @@ def handler(route, request):
         return route.fulfill(status=200, headers=hdr, body=json.dumps({"access_token": "FRESH", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "R2", "scope": "user-read-currently-playing"}))
     if host == "i.scdn.co":
         return route.fulfill(status=200, headers={"Access-Control-Allow-Origin": "*", "Content-Type": "image/png"}, body=ART)
+    if host == "www.youtube.com" and u.path == "/oembed":
+        vid = urllib.parse.parse_qs(urllib.parse.urlparse(q.get("url", "")).query).get("v", [""])[0]
+        names = {"ccccccccccc": ("Singer C - Third Song", "Singer C"), "bbbbbbbbbbb": ("Singer B - Second Song", "Singer B")}
+        if vid not in names:
+            return route.fulfill(status=404, headers={"Access-Control-Allow-Origin": "*"}, body="Not Found")
+        return route.fulfill(status=200, headers={"Access-Control-Allow-Origin": "*", "Content-Type": "application/json"}, body=json.dumps({"title": names[vid][0], "author_name": names[vid][1]}))
     if host == "i.ytimg.com":
         if "maxresdefault" in u.path:
             return route.fulfill(status=404, headers={"Access-Control-Allow-Origin": "*"}, body=b"")
@@ -94,20 +100,39 @@ def handler(route, request):
 
 FAKE_YT = """
 window.YT = { Player: class {
-  constructor(el, o) { this.o = o; this.vid = o.videoId; this.base = 0; this.t0 = performance.now(); this.st = -1; this.vol = 100; this.muted = true;
+  constructor(el, o) { this.o = o; this.vid = o.videoId || null; this.list = []; this.idx = -1; this.base = 0; this.t0 = performance.now(); this.st = -1; this.vol = 100; this.muted = true; this.loop = false; this.shuffle = false;
     window.__yt = this;
     const f = document.createElement('iframe'); f.id = 'ytplayer'; document.getElementById(el).replaceWith(f);
     setTimeout(() => o.events.onReady && o.events.onReady({ target: this }), 60); }
-  playVideo() { if (this.st !== 1) { this.st = 1; this.t0 = performance.now(); } }
-  pauseVideo() { this.base = this.getCurrentTime(); this.st = 2; }
+  emit(st) { this.st = st; const h = this.o.events.onStateChange; if (h) setTimeout(() => h({ data: st, target: this }), 0); }
+  start(id) {
+    this.vid = id; this.base = 0; this.t0 = performance.now(); this.emit(-1);
+    if ((window.__ytBad || []).includes(id)) { const h = this.o.events.onError; setTimeout(() => h && h({ data: 150, target: this }), 30); return; }
+    this.emit(1);
+  }
+  playVideo() { if (this.st !== 1) { this.t0 = performance.now(); this.emit(1); } }
+  pauseVideo() { this.base = this.getCurrentTime(); this.emit(2); }
   getPlayerState() { return this.st; }
   getCurrentTime() { return this.st === 1 ? this.base + (performance.now() - this.t0) / 1000 : this.base; }
   getDuration() { return 200; }
-  getVideoData() { return { video_id: this.vid, title: window.__ytTitle || 'Test Artist - Test Song (Official Music Video)', author: window.__ytAuthor || 'TestArtistVEVO' }; }
-  loadVideoById(id) { this.vid = id; this.base = 0; this.t0 = performance.now(); this.st = 1; }
+  getVideoData() { const t = (window.__ytTitles || {})[this.vid]; return { video_id: this.vid, title: t || window.__ytTitle || 'Test Artist - Test Song (Official Music Video)', author: window.__ytAuthor || 'TestArtistVEVO' }; }
+  loadVideoById(id) { this.list = []; this.idx = -1; this.start(id); }
+  loadPlaylist(arg, index, start) {
+    if (Array.isArray(arg)) this.list = arg.slice(); else { this.list = ((window.__ytLists || {})[arg.list] || []).slice(); index = arg.index; }
+    this.idx = Math.max(0, Math.min(index || 0, this.list.length - 1));
+    this.start(this.list[this.idx]); if (start) this.base = start;
+  }
+  getPlaylist() { return this.list.length ? this.list.slice() : null; }
+  getPlaylistIndex() { return this.idx; }
+  nextVideo() { if (this.idx < this.list.length - 1) { this.idx++; this.start(this.list[this.idx]); } else if (this.loop && this.list.length) { this.idx = 0; this.start(this.list[0]); } }
+  previousVideo() { if (this.idx > 0) { this.idx--; this.start(this.list[this.idx]); } }
+  playVideoAt(i) { if (i >= 0 && i < this.list.length) { this.idx = i; this.start(this.list[i]); } }
+  setShuffle(on) { this.shuffle = on; } setLoop(on) { this.loop = on; }
   seekTo(s) { this.base = s; this.t0 = performance.now(); }
   setVolume(v) { this.vol = v; } getVolume() { return this.vol; } unMute() { this.muted = false; } isMuted() { return this.muted; }
 } };
+window.__ytLists = { PLtest: ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'] };
+window.__ytTitles = { aaaaaaaaaaa: 'Test Artist - Test Song', bbbbbbbbbbb: 'Singer B - Second Song', ccccccccccc: 'Singer C - Third Song' };
 """
 
 results = []
@@ -183,6 +208,7 @@ try:
             "--auto-accept-this-tab-capture", "--enable-unsafe-swiftshader"])
 
         def watch(pg):
+            pg.on("crash", lambda *_: errors.append("page crashed"))
             pg.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
             pg.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}") if m.type == "error" else None)
             return pg
@@ -247,6 +273,7 @@ try:
 
         # ---------- E3. pause / resume: paused time is left out ----------
         page.evaluate("LyricsStudio.rec.start({audio:'none', fps:30, bitrate:8e6})")
+        t_rec = time.time()
         page.wait_for_timeout(1500)
         page.click("#recPause")
         page.wait_for_timeout(200)
@@ -258,10 +285,12 @@ try:
         page.keyboard.press("p")  # P resumes
         page.wait_for_timeout(1500)
         check("pause: P key resumes", page.evaluate("LyricsStudio.rec.state") == "recording")
+        active = page.evaluate("LyricsStudio.rec.elapsed()")
         f3, _ = save_download(page, "LyricsStudio.rec.stop()", "E3-record-paused")
+        wall = time.time() - t_rec
         d3 = media_duration(f3)
-        print("   paused recording duration:", d3, "(wall time ~4.7 s, 1.5 s of it paused)")
-        check("pause: paused part is not in the file", 2.4 < d3 < 4.0, d3)
+        print(f"   paused recording: file {d3} s, recording time {active:.2f} s, wall {wall:.2f} s")
+        check("pause: paused part is not in the file", d3 < wall - 1.0 and abs(d3 - active) < 1.0, (d3, round(active, 2), round(wall, 2)))
 
         # ---------- E4. hidden tab: a worker keeps frames coming ----------
         page.evaluate("""(() => { const A = LyricsStudio; A.__steps = 0;
@@ -738,6 +767,205 @@ try:
         check("phone: dock and seek bar fit the screen", ph["dock"][0] >= 0 and ph["dock"][0] + ph["dock"][2] <= ph["vw"] and ph["scrub"][0] >= 0 and ph["scrub"][0] + ph["scrub"][2] <= ph["vw"], ph)
         wake(page); page.wait_for_timeout(200)
         page.screenshot(path=str(OUT / "P1-phone-youtube.png"))
+        ctx.close()
+
+        # ---------- Y. YouTube playlists ----------
+        ctx, page = new_page(init=FAKE_YT)
+        page.goto(BASE)
+        page.wait_for_timeout(600)
+        hook_toasts(page)
+        page.click("button[data-src=youtube]")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://www.youtube.com/playlist?list=PLtest")
+        page.click("#ytForm button[type=submit]")
+        ok = wait_js(page, "LyricsStudio.track && LyricsStudio.track.title === 'Test Song'", 6000)
+        check("playlist: a YouTube playlist starts with its first song", ok)
+        wake(page)
+        ok = wait_js(page, "!document.getElementById('btnNext').hidden", 3000)
+        check("playlist: previous / next / list buttons appear", ok and page.evaluate("!document.getElementById('btnPrev').hidden && !document.getElementById('btnQueue').hidden"))
+        wake(page); page.wait_for_timeout(200)
+        page.screenshot(path=str(OUT / "Y0-playlist-controls.png"))
+        t0 = time.time()
+        page.keyboard.press("n")
+        ok = wait_js(page, "LyricsStudio.track && LyricsStudio.track.title === 'Second Song'", 3000)
+        check("playlist: N plays the next song, noticed right away", ok and time.time() - t0 < 2.5, (ok, round(time.time() - t0, 2), page.evaluate("LyricsStudio.track && LyricsStudio.track.title")))
+        check("playlist: the next song brings its own title and artist", page.evaluate("LyricsStudio.track.artist") == "Singer B")
+        page.keyboard.press("Shift+P")
+        ok = wait_js(page, "LyricsStudio.track.title === 'Test Song'", 3000)
+        check("playlist: Shift+P at the start of a song goes back one", ok)
+        page.keyboard.press("q")
+        ok = wait_js(page, "document.querySelectorAll('#qList li').length === 3", 3000)
+        wait_js(page, "[...document.querySelectorAll('#qList .qm b')].some(b => b.textContent === 'Third Song')", 4000)
+        qi = page.evaluate("({cur: (document.querySelector('#qList li[aria-current] .qm b') || {}).textContent, titles: [...document.querySelectorAll('#qList .qm b')].map(b => b.textContent), count: document.getElementById('qCount').textContent})")
+        check("playlist: the list shows every song, marks the current one, fills in titles", ok and qi["cur"] == "Test Song" and qi["titles"] == ["Test Song", "Second Song", "Third Song"] and qi["count"] == "3 首", qi)
+        page.screenshot(path=str(OUT / "Y1-queue.png"))
+        page.click("#qList li:nth-child(3) .qitem")
+        ok = wait_js(page, "LyricsStudio.track.title === 'Third Song'", 3000)
+        check("playlist: clicking a song in the list plays it", ok)
+        page.click("#qShuffle")
+        page.wait_for_timeout(400)
+        check("playlist: shuffle goes to the player and is remembered", page.evaluate("__yt.shuffle === true && JSON.parse(localStorage.getItem('ls.settings')).ytShuffle === true"))
+        page.click("#qShuffle"); page.wait_for_timeout(300)
+        page.click("#qList li:nth-child(1) .qx")
+        ok = wait_js(page, "__yt.getPlaylist() && __yt.getPlaylist().length === 2", 3000)
+        check("playlist: removing a song keeps the current one playing", ok and page.evaluate("LyricsStudio.track.title") == "Third Song" and page.evaluate("__yt.getPlaylist().join()") == "bbbbbbbbbbb,ccccccccccc", page.evaluate("__yt.getPlaylist()"))
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        page.evaluate("LyricsStudio.openYoutube(true)")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://youtu.be/aaaaaaaaaaa")
+        page.click("#ytAdd")
+        ok = wait_js(page, "__yt.getPlaylist() && __yt.getPlaylist().length === 3", 3000)
+        check("playlist: a song can be added to the end without interrupting", ok and page.evaluate("__yt.getPlaylist()[2]") == "aaaaaaaaaaa" and page.evaluate("LyricsStudio.track.title") == "Third Song")
+        n0 = len(toasts(page))
+        page.evaluate("window.__ytBad = ['badbadbadba']; LyricsStudio.openYoutube()")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://youtu.be/aaaaaaaaaaa\nhttps://youtu.be/badbadbadba\nhttps://youtu.be/ccccccccccc")
+        page.click("#ytForm button[type=submit]")
+        wait_js(page, "LyricsStudio.track && LyricsStudio.track.title === 'Test Song' && __yt.getPlaylist().length === 3", 3000)
+        page.keyboard.press("n")
+        ok = wait_js(page, "LyricsStudio.track.title === 'Third Song'", 4000)
+        check("playlist: your own list of links; a video that cannot play here is skipped", ok and said(page, n0, "跳過"), toasts(page)[n0:])
+        n0 = len(toasts(page))
+        page.evaluate("LyricsStudio.openYoutube()")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://music.youtube.com/playlist?list=LM")
+        page.click("#ytForm button[type=submit]")
+        page.wait_for_timeout(400)
+        check("playlist: liked music (private) is explained", said(page, n0, "私人"), toasts(page)[n0:])
+
+        # ---------- SP. one file per song ----------
+        page.evaluate("LyricsStudio.openYoutube()")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://www.youtube.com/playlist?list=PLtest")
+        page.click("#ytForm button[type=submit]")
+        wait_js(page, "LyricsStudio.track && LyricsStudio.track.title === 'Test Song'", 4000)
+        files = []
+        page.on("download", lambda d: files.append(d))
+        page.evaluate("LyricsStudio.S.recOnChange = 'split'; LyricsStudio.segNo = 0; LyricsStudio.rec.start({audio:'none', fps:30, bitrate:4e6}, {track: LyricsStudio.track})")
+        page.wait_for_timeout(3000)
+        page.keyboard.press("n")
+        wait_js(page, "LyricsStudio.track.title === 'Second Song'", 3000)
+        page.wait_for_timeout(2600)
+        page.evaluate("LyricsStudio.rec.stop()")
+        t_end = time.time() + 12
+        while len(files) < 2 and time.time() < t_end:
+            page.wait_for_timeout(200)
+        names = [d.suggested_filename for d in files]
+        check("per-song files: one numbered file per song, named after it", len(names) == 2 and names[0].startswith("01-Test Song") and names[1].startswith("02-Second Song"), names)
+        if len(files) == 2:
+            paths = []
+            for k, d in enumerate(files):
+                f = OUT / f"SP{k + 1}{Path(d.suggested_filename).suffix}"
+                d.save_as(str(f)); paths.append(f)
+            durs = [media_duration(f) for f in paths]
+            check("per-song files: each file holds its own song", 2.2 < durs[0] < 4.4 and 1.6 < durs[1] < 3.8, durs)
+        page.evaluate("LyricsStudio.S.recOnChange = 'stop'")
+        ctx.close()
+
+        # ---------- KT. KTV style ----------
+        ctx, page = new_page()
+        page.goto(BASE)
+        page.wait_for_timeout(900)
+        page.evaluate("LyricsStudio.r.warm = -1e9; LyricsStudio.S.layout = '16:9'; LyricsStudio.resize(); LyricsStudio.S.theme = 'ktv'; LyricsStudio.r.setTheme('ktv')")
+        settle(page, "LyricsStudio.sources.demo.jump(1.0)", 0.9); snap(page, "KT1-intro-title.png")
+        settle(page, "LyricsStudio.sources.demo.jump(1.9)", 0.3); snap(page, "KT2-countin.png")
+        settle(page, "LyricsStudio.sources.demo.jump(5.0)", 0.6); snap(page, "KT3-singing.png")
+        k = page.evaluate("({line: LyricsStudio.r.curLine, plan: LyricsStudio.r.ktvPlan.length})")
+        check("KTV: the line being sung is the one read out to screen readers", k["line"] == "窗外的燈一盞一盞往後退" and k["plan"] >= 10, k)
+        settle(page, "LyricsStudio.sources.demo.jump(35.0)", 0.6); snap(page, "KT4-verse-countin.png")
+        settle(page, "LyricsStudio.S.layout = '9:16'; LyricsStudio.resize(); LyricsStudio.sources.demo.jump(13.0)", 0.8); snap(page, "KT5-tall.png")
+        ctx.close()
+
+        # ---------- KA. karaoke microphone ----------
+        ctx, page = new_page()
+        page.goto(BASE)
+        page.wait_for_timeout(800)
+        hook_toasts(page)
+        page.keyboard.press("k")
+        page.wait_for_timeout(300)
+        check("karaoke: K opens the panel; monitoring waits for the mic", page.evaluate("document.getElementById('dlgKaraoke').open && document.getElementById('kMon').disabled"))
+        page.click("#kOn")
+        ok = wait_js(page, "LyricsStudio.mic.on === true", 4000)
+        lv = 0
+        for _ in range(20):
+            lv = max(lv, page.evaluate("LyricsStudio.mic.level")); page.wait_for_timeout(100)
+        check("karaoke: microphone on, the level meter moves", ok and lv > 0.0005, lv)
+        st = page.evaluate("(() => { const t = LyricsStudio.mic.stream.getAudioTracks()[0].getSettings(); return { ec: t.echoCancellation, ns: t.noiseSuppression, agc: t.autoGainControl, mon: LyricsStudio.mic.monitorGain.gain.value }; })()")
+        check("karaoke: no voice processing on the mic; headphones silent by default", st["ec"] is False and st["ns"] is False and st["agc"] is False and st["mon"] == 0, st)
+        page.check("#kMon")
+        page.wait_for_timeout(300)
+        check("karaoke: hearing yourself in headphones turns on", page.evaluate("LyricsStudio.mic.monitor === true && LyricsStudio.mic.monitorGain.gain.value > 0.9"))
+        n0 = len(toasts(page))
+        page.evaluate("KaraokeMic.FEEDBACK_RMS = -1")  # pretend every sound is a howl
+        ok = wait_js(page, "LyricsStudio.mic.monitor === false", 3000)
+        page.evaluate("KaraokeMic.FEEDBACK_RMS = 0.45")
+        page.wait_for_timeout(150)
+        check("karaoke: feedback turns hearing yourself off and says why", ok and said(page, n0, "回授") and not page.is_checked("#kMon"), toasts(page)[n0:])
+        page.fill("#kEcho", "0.8")
+        page.wait_for_timeout(100)
+        check("karaoke: echo slider applied and remembered", page.evaluate("LyricsStudio.mic.echo === 0.8 && JSON.parse(localStorage.getItem('ls.settings')).kEcho === 0.8"))
+        page.screenshot(path=str(OUT / "KA1-karaoke-panel.png"))
+        page.click("#kRec")
+        page.wait_for_timeout(300)
+        check("karaoke: 'record me singing' opens recording with the microphone chosen", page.evaluate("document.getElementById('dlgRec').open && document.getElementById('recForm').aud.value === 'mic'"))
+        page.uncheck("#recCd")
+        with page.expect_download(timeout=15000) as dlk:
+            page.click("#recForm button[type=submit]")
+            page.wait_for_timeout(2500)
+            page.evaluate("LyricsStudio.rec.stop()")
+        fk = OUT / ("KA2-sing" + Path(dlk.value.suggested_filename).suffix)
+        dlk.value.save_as(str(fk))
+        kinds = sorted(x.get("codec_type") for x in ffprobe(fk).get("streams", []))
+        check("karaoke: the recording has the voice", kinds == ["audio", "video"], kinds)
+        check("karaoke: the microphone stays on after recording", page.evaluate("LyricsStudio.mic.on && LyricsStudio.mic.stream.getAudioTracks()[0].readyState === 'live'"))
+        page.evaluate("LyricsStudio.toggleMic()")
+        page.wait_for_timeout(200)
+        check("karaoke: the microphone can be turned off", page.evaluate("LyricsStudio.mic.on") is False and page.evaluate("document.getElementById('btnKaraoke').getAttribute('aria-pressed')") == "false")
+        ctx.close()
+
+        # ---------- CL. record one stretch of lyrics ----------
+        ctx, page = new_page()
+        page.goto(BASE)
+        page.wait_for_timeout(900)
+        hook_toasts(page)
+        page.evaluate("LyricsStudio.sources.demo.jump(2)")
+        page.keyboard.press("r")
+        page.wait_for_timeout(300)
+        page.check("#recForm input[value=clip]")
+        page.wait_for_timeout(150)
+        opts = page.evaluate("[...document.getElementById('clipFrom').options].map(o => [o.value, o.textContent])")
+        fv = next(v for v, t in opts if t.startswith("0:11"))
+        tv = next(v for v, t in opts if t.startswith("0:15"))
+        page.select_option("#clipFrom", fv); page.select_option("#clipTo", tv)
+        page.check("#clipTall"); page.check("#recForm input[value=none]")
+        page.wait_for_timeout(100)
+        exp = page.evaluate("LyricsStudio.clipRange()")
+        page.screenshot(path=str(OUT / "CL1-clip-dialog.png"))
+        with page.expect_download(timeout=30000) as dlc:
+            page.click("#recForm button[type=submit]")
+            page.wait_for_timeout(600)
+            w = page.evaluate("({w: stage.width, h: stage.height})")
+        fc = OUT / ("CL2-clip" + Path(dlc.value.suggested_filename).suffix)
+        dlc.value.save_as(str(fc))
+        dc = media_duration(fc)
+        vs = [x for x in ffprobe(fc).get("streams", []) if x.get("codec_type") == "video"]
+        check("clip: switched to 9:16 and recorded just the chosen lines", w["h"] == 1920 and vs and vs[0].get("height") == 1920 and abs(dc - (exp["to"] - exp["from"])) < 0.8 and "片段" in dlc.value.suggested_filename, (w, dc, exp, dlc.value.suggested_filename))
+        page.wait_for_timeout(300)
+        check("clip: in 9:16 the short-video guide shows on screen (it is not recorded)", page.evaluate("!document.getElementById('safe').hidden"))
+        page.screenshot(path=str(OUT / "CL4-safe-area.png"))
+        page.evaluate("LyricsStudio.sources.demo.canSeek = false; LyricsStudio.sources.demo.jump(1)")  # like Spotify: cannot jump
+        page.keyboard.press("r"); page.wait_for_timeout(300)
+        page.check("#recForm input[value=clip]")
+        page.select_option("#clipFrom", fv); page.select_option("#clipTo", tv)
+        page.click("#recForm button[type=submit]")
+        ok = wait_js(page, "document.body.classList.contains('rec-wait') && document.getElementById('recWait').textContent.includes('開始錄')", 3000)
+        wake(page); page.screenshot(path=str(OUT / "CL3-clip-waiting.png"))
+        n0 = len(toasts(page))
+        page.click("#recStop")
+        page.wait_for_timeout(300)
+        check("clip: a source that cannot jump waits for the line, and the wait can be cancelled", ok and page.evaluate("LyricsStudio.rec.state") == "idle" and said(page, n0, "取消"), (ok, toasts(page)[n0:]))
+        page.evaluate("LyricsStudio.sources.demo.canSeek = true")
         ctx.close()
 
         # ---------- N. opened the wrong way: file:// and localhost ----------

@@ -200,6 +200,19 @@ function downloadBlob(blob, name) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+/* save into a folder the user picked (File System Access API); never overwrite an existing file */
+async function writeToDir(dir, name, blob) {
+  let fname = name;
+  for (let k = 2; k < 50; k++) {
+    try { await dir.getFileHandle(fname); } catch (e) { break; }
+    fname = name.replace(/(\.[^.]+)$/, ` (${k})$1`);
+  }
+  const fh = await dir.getFileHandle(fname, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+  return fname;
+}
 function safeName(s) {
   return (String(s || 'lyrics').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'lyrics').slice(0, 60);
 }

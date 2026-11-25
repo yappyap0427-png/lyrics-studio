@@ -7,7 +7,7 @@ const vm = require('vm');
 const SRC = path.join(__dirname, '..', 'src');
 const FILES = ['util.js', 'lrc.js', 'palette.js', 'lyrics.js', 'sources.js', 'renderer.js', 'recorder.js'];
 const code = FILES.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n;\n') +
-  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER, stripKaraoke })';
+  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER, stripKaraoke, ktvSchedule })';
 
 function memStorage(map = new Map()) {
   return { getItem: k => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: k => map.delete(k), _map: map };
@@ -29,7 +29,7 @@ const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
 const { api } = load();
-const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER, stripKaraoke } = api;
+const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER, stripKaraoke, ktvSchedule } = api;
 
 test('tokenize splits CJK per character and keeps Latin words with their spaces', () => {
   assert.deepStrictEqual(Array.from(tokenize('你好 world, 再見')), ['你', '好', ' ', 'world, ', '再', '見']);
@@ -104,6 +104,49 @@ test('YouTubeSource.parseId reads every link style', () => {
   for (const u of [`https://music.youtube.com/watch?v=${id}&list=RD`, `https://youtu.be/${id}?si=x`, `https://www.youtube.com/shorts/${id}`, id, `youtube.com/watch?v=${id}`]) assert.strictEqual(YouTubeSource.parseId(u), id, u);
   assert.strictEqual(YouTubeSource.parseId('https://example.com/foo'), null);
   assert.strictEqual(YouTubeSource.parseId('not a link'), null);
+});
+test('YouTube input: one song, a playlist, an album, or several links', () => {
+  const P = t => JSON.parse(JSON.stringify(YouTubeSource.parseInput(t)));
+  assert.deepStrictEqual(P('https://music.youtube.com/watch?v=abcdefghijk'), { kind: 'video', id: 'abcdefghijk' });
+  assert.deepStrictEqual(P('https://www.youtube.com/playlist?list=PL123'), { kind: 'list', list: 'PL123', id: null, index: null });
+  assert.deepStrictEqual(P('https://music.youtube.com/playlist?list=OLAK5uy_x'), { kind: 'list', list: 'OLAK5uy_x', id: null, index: null });
+  assert.deepStrictEqual(P('https://www.youtube.com/watch?v=abcdefghijk&list=PL123&index=4'), { kind: 'list', list: 'PL123', id: 'abcdefghijk', index: 3 });
+  assert.deepStrictEqual(P('https://youtu.be/aaaaaaaaaaa\nhttps://youtu.be/bbbbbbbbbbb\n\nhttps://www.youtube.com/watch?v=ccccccccccc'), { kind: 'queue', ids: ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'], skipped: 0 });
+  assert.deepStrictEqual(P('https://youtu.be/aaaaaaaaaaa https://www.youtube.com/playlist?list=PL9'), { kind: 'video', id: 'aaaaaaaaaaa', skipped: 1 });
+  assert.deepStrictEqual(P('https://music.youtube.com/watch?v=abcdefghijk&list=RDAMVMabcdefghijk'), { kind: 'video', id: 'abcdefghijk' });
+  assert.deepStrictEqual(P('https://music.youtube.com/playlist?list=LM'), { kind: 'private' });
+  assert.deepStrictEqual(P('https://www.youtube.com/watch?v=abcdefghijk&list=LL'), { kind: 'video', id: 'abcdefghijk', privateList: true });
+  assert.strictEqual(YouTubeSource.parseInput('https://example.com/watch?v=abcdefghijk'), null);
+  assert.strictEqual(YouTubeSource.parseInput('hello'), null);
+});
+test('KTV schedule: rows alternate, a verse starts on top, nothing overlaps, every line is up while sung', () => {
+  const lrc = ['[00:05.00]one', '[00:08.00]two', '[00:11.00]three', '[00:14.00]four', '[00:17.00]five', '[00:40.00]six', '[00:43.00]seven', '[00:46.00]eight'].join('\n');
+  const E = LRC.buildTimeline(LRC.parse(lrc), 60);
+  const plan = ktvSchedule(E);
+  assert.strictEqual(plan.length, 8);
+  assert.deepStrictEqual(Array.from(plan, o => o.row), [0, 1, 0, 1, 0, 0, 1, 0]);
+  assert.deepStrictEqual(Array.from(plan, o => o.brk), [true, false, false, false, false, true, false, false]);
+  assert.ok(plan[0].dots && plan[5].dots, 'count-in dots before each verse');
+  assert.strictEqual(plan[1].appear, plan[0].appear, 'the second line of a verse shows with the first');
+  for (const o of plan) {
+    const e = E[o.i];
+    assert.ok(o.appear <= e.time && o.hide >= e.fillEnd, `line ${e.text} on screen while sung`);
+  }
+  for (const r of [0, 1]) {
+    const rows = plan.filter(o => o.row === r);
+    for (let k = 1; k < rows.length; k++) assert.ok(rows[k].appear >= rows[k - 1].hide - 1e-9, `row ${r} lines do not overlap`);
+  }
+});
+test('clip suggestion: the repeated block (the chorus), else ~20 s from a quarter in', () => {
+  const lines = ['verse a', 'verse b', 'hook one', 'hook two', 'verse c', 'verse d', 'hook one', 'hook two', 'outro'];
+  const lrc = lines.map((t, k) => `[00:${String(5 + k * 4).padStart(2, '0')}.00]${t}`).join('\n');
+  const E = LRC.buildTimeline(LRC.parse(lrc), 60);
+  const c = LRC.suggestClip(E, 30);
+  assert.strictEqual(E[c.from].text, 'hook one'); assert.strictEqual(E[c.to].text, 'hook two');
+  const E2 = LRC.buildTimeline(LRC.parse(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((t, k) => `[00:${String(5 + k * 6).padStart(2, '0')}.00]${t}`).join('\n')), 60);
+  const c2 = LRC.suggestClip(E2, 30);
+  assert.strictEqual(E2[c2.from].text, 'c');
+  assert.ok(E2[c2.to].fillEnd - E2[c2.from].time <= 20);
 });
 test('Lyrics.cleanTitle drops version noise', () => {
   assert.strictEqual(Lyrics.cleanTitle('Song - Remastered 2011'), 'Song');

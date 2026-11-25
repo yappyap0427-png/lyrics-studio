@@ -200,6 +200,65 @@ body.dragging .drop { opacity: 1; }
   #ytplayer, .ytcard iframe { width: 200px; height: 200px; }
   .grid2, .grid3 { grid-template-columns: 1fr; }
 }
+/* ---------- playlist controls in the seek bar ---------- */
+.scrub .ib.sm { height: 32px; min-width: 32px; padding: 0 5px; }
+.scrub .ib.sm svg { width: 18px; height: 18px; }
+.scrub #btnPrev + #btnNext { margin-left: -10px; }
+.scrub #btnQueue { margin-left: -4px; }
+.ib.on { color: rgb(var(--accent)); background: rgb(var(--accent) / .16); }
+.ib.on:hover { background: rgb(var(--accent) / .24); }
+
+/* ---------- YouTube link box ---------- */
+.field textarea { appearance: none; width: 100%; min-height: 48px; max-height: 40vh; padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(255 255 255 / .14); background: rgb(0 0 0 / .28); color: #fff; font: 500 15px/1.45 var(--ui); resize: vertical; }
+.field textarea:focus { outline: none; border-color: rgb(var(--accent)); }
+
+/* ---------- playlist ---------- */
+.qhead { display: flex; align-items: center; gap: 12px; }
+.qhead h2 { margin: 0; }
+.queue { list-style: none; margin: 14px -8px 0; padding: 0; max-height: min(52vh, 460px); overflow: auto; display: grid; gap: 2px; }
+.queue li { display: flex; align-items: center; gap: 2px; border-radius: 12px; }
+.queue li[aria-current] { background: rgb(var(--accent) / .14); }
+.qitem { appearance: none; border: 0; background: transparent; color: #fff; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 12px; text-align: left; cursor: pointer; font: inherit; }
+.qitem:hover { background: rgb(255 255 255 / .06); }
+.qn { width: 2em; flex: none; text-align: right; color: rgb(255 255 255 / .5); font: 500 13px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.queue li[aria-current] .qn { color: rgb(var(--accent)); }
+.qitem img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; flex: none; background: rgb(255 255 255 / .06); }
+.qm { min-width: 0; display: grid; gap: 2px; }
+.qm b { font: 600 14px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qm small { font-size: 12px; line-height: 1.3; color: rgb(255 255 255 / .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qx { appearance: none; border: 0; background: transparent; color: rgb(255 255 255 / .5); width: 36px; height: 36px; border-radius: 50%; font: 400 20px/1 var(--ui); cursor: pointer; flex: none; }
+.qx:hover { background: rgb(255 255 255 / .08); color: #fff; }
+.qx:disabled { visibility: hidden; }
+button.ghost[aria-pressed="true"] { background: rgb(var(--accent) / .22); color: rgb(var(--accent)); }
+
+/* ---------- record dialog: clip and saving ---------- */
+.choices.two { grid-template-columns: 1fr 1fr; }
+.choices.two legend { grid-column: 1 / -1; }
+.choices label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.clipbox { margin-top: 10px; padding: 2px 14px 14px; border-radius: 14px; background: rgb(255 255 255 / .045); }
+.dirpick { width: 100%; height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 12px; padding: 0 14px; }
+.dirpick span { overflow: hidden; text-overflow: ellipsis; }
+.dirpick small { color: rgb(255 255 255 / .6); font-weight: 500; font-size: 12px; }
+.recbar .wait { font-weight: 500; color: rgb(255 255 255 / .85); }
+body.rec-wait .recbar { border-color: rgb(255 176 32 / .45); background: rgb(30 20 4 / .66); }
+body.rec-wait .recbar .dot { animation: none; background: #ffb020; }
+body.rec-wait #recPause, body.rec-wait #recBytes { display: none; }
+
+/* ---------- karaoke ---------- */
+.microw { display: flex; align-items: center; gap: 14px; margin: 6px 0 2px; }
+.meter { flex: 1; height: 8px; border-radius: 999px; background: rgb(255 255 255 / .1); overflow: hidden; }
+.meter i { display: block; height: 100%; background: linear-gradient(90deg, rgb(var(--accent)), #ff6b6b); transform: scaleX(0); transform-origin: left; transition: transform .08s linear; }
+.check:has(input:disabled) { opacity: .5; cursor: default; }
+
+/* ---------- where short-video apps cover the picture (preview only) ---------- */
+.safe { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+.safe .sz { position: absolute; background: repeating-linear-gradient(135deg, rgb(255 255 255 / .07) 0 8px, transparent 8px 16px); outline: 1px dashed rgb(255 255 255 / .28); outline-offset: -1px; }
+.safe .top { left: 0; right: 0; top: 0; height: 12%; }
+.safe .right { right: 0; top: 42%; height: 34%; width: 14%; }
+.safe .bottom { left: 0; right: 0; bottom: 0; height: 24%; display: grid; place-items: center; }
+.safe .bottom span { font: 500 12px/1.4 var(--ui); color: rgb(255 255 255 / .72); background: rgb(0 0 0 / .45); padding: 5px 11px; border-radius: 999px; max-width: 86%; text-align: center; }
+body.idle .safe { opacity: .55; }
+
 /* small phones: after the 720px rules so these win */
 @media (max-width: 420px) {
   .ib { min-width: 30px; padding: 0 4px; }
@@ -208,6 +267,9 @@ body.dragging .drop { opacity: 1; }
 }
 @media (max-width: 370px) {
   .dock .sep { display: none; }
+}
+@media (max-width: 420px) {
+  #btnFull { display: none; } /* phones: the browser's own full screen is better, and the dock needs the room */
 }
 
 </style>
@@ -233,6 +295,12 @@ body.dragging .drop { opacity: 1; }
   </header>
 
   <div class="scrub glass" id="scrub" hidden>
+    <button type="button" class="ib sm" id="btnPrev" data-tip="上一首（Shift+P）" aria-label="上一首" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5.5v13"/><path d="M18 6.2 9.5 12l8.5 5.8z"/></svg>
+    </button>
+    <button type="button" class="ib sm" id="btnNext" data-tip="下一首（N）" aria-label="下一首" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13"/><path d="M6 6.2 14.5 12 6 17.8z"/></svg>
+    </button>
     <span class="t" id="tCur">0:00</span>
     <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="播放進度">
     <span class="t" id="tDur">0:00</span>
@@ -240,6 +308,9 @@ body.dragging .drop { opacity: 1; }
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
       <input type="range" id="vol" min="0" max="100" step="1" value="100" aria-label="音量">
     </label>
+    <button type="button" class="ib sm" id="btnQueue" data-tip="播放清單（Q）" aria-label="播放清單" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h12M4 12h12M4 17.5h7"/><path d="M15.5 15v5.5l4.5-2.75z"/></svg>
+    </button>
   </div>
 
   <nav class="dock glass" aria-label="控制列">
@@ -254,6 +325,9 @@ body.dragging .drop { opacity: 1; }
     <span class="sep"></span>
     <button type="button" class="ib txt" id="btnTheme" data-tip="風格（T）" aria-haspopup="menu" aria-expanded="false">流光</button>
     <button type="button" class="ib txt" id="btnLayout" data-tip="畫面比例（V）" aria-haspopup="menu" aria-expanded="false">填滿</button>
+    <button type="button" class="ib" id="btnKaraoke" data-tip="卡拉 OK（K）" aria-label="卡拉 OK" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+    </button>
     <button type="button" class="ib" id="btnSettings" data-tip="設定" aria-label="設定">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
     </button>
@@ -266,7 +340,7 @@ body.dragging .drop { opacity: 1; }
 </div>
 
 <div class="recbar" id="recbar" hidden>
-  <span class="dot"></span><span id="recTime">0:00</span><span class="bytes" id="recBytes">0.0 MB</span>
+  <span class="dot"></span><span id="recTime">0:00</span><span class="bytes" id="recBytes">0.0 MB</span><span class="wait" id="recWait" hidden></span>
   <button type="button" class="soft" id="recPause">暫停</button>
   <button type="button" id="recStop">停止錄影</button>
 </div>
@@ -275,6 +349,7 @@ body.dragging .drop { opacity: 1; }
   <p>準備開始錄影</p>
   <button type="button" id="cdCancel">取消</button>
 </div>
+<div class="safe" id="safe" hidden aria-hidden="true"><div class="sz top"></div><div class="sz right"></div><div class="sz bottom"><span>短影音 App 的按鈕和說明會蓋住這裡（只是提示，不會錄進去）</span></div></div>
 <div class="ytcard" id="ytcard" hidden><div class="ythead">YouTube 播放器（可拖曳）</div><div id="ytplayer"></div></div>
 <div class="toast glass" id="toast" role="status" aria-live="polite"><span class="msg"></span><button type="button" class="x" aria-label="關閉訊息">×</button></div>
 <div class="drop" aria-hidden="true">放開來匯入 LRC 歌詞</div>
@@ -302,10 +377,22 @@ body.dragging .drop { opacity: 1; }
   <form class="sheet-in" id="ytForm">
     <h2 id="ytTitle">播放 YouTube 的歌</h2>
     <p class="lead">YouTube Music 沒有開放讀取播放進度，所以歌會在這個程式裡播放，歌詞跟著它同步。不需要登入。</p>
-    <label class="field"><span>歌曲連結</span><input id="ytUrl" autofocus autocomplete="off" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…"></label>
-    <p class="hint">用 YouTube Music 的歌曲連結最準。MV 常有前奏或劇情片段，歌詞可能要用偏移調整。</p>
-    <div class="row end"><button type="button" class="ghost" data-close>取消</button><button type="submit" class="primary">播放</button></div>
+    <label class="field"><span>歌曲或歌單連結</span><textarea id="ytUrl" rows="2" autofocus autocomplete="off" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…"></textarea></label>
+    <p class="hint">可以貼歌單或專輯的連結；一行貼一個連結，就是你自己的播放清單。用 YouTube Music 的歌曲連結最準，MV 常有前奏或劇情片段，歌詞可能要用偏移調整。伴奏版或 KTV 版會自動用原曲的歌詞。</p>
+    <div class="row end"><button type="button" class="ghost" data-close>取消</button><button type="button" class="ghost" id="ytAdd" hidden>加到清單</button><button type="submit" class="primary">播放</button></div>
   </form>
+</dialog>
+
+<dialog class="sheet wide" id="dlgQueue" aria-labelledby="qTitle">
+  <div class="sheet-in">
+    <div class="qhead"><h2 id="qTitle">播放清單</h2><span class="badge" id="qCount"></span></div>
+    <ol class="queue" id="qList"></ol>
+    <p class="hint" id="qNote"></p>
+    <div class="row between">
+      <div class="left"><button type="button" class="ghost" id="qShuffle" aria-pressed="false">隨機播放</button><button type="button" class="ghost" id="qLoop" aria-pressed="false">播完從頭再來</button></div>
+      <div class="left"><button type="button" class="ghost" id="qAdd">加歌</button><button type="button" class="primary" data-close>完成</button></div>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="sheet wide" id="dlgSearch" aria-labelledby="sTitle">
@@ -342,15 +429,53 @@ body.dragging .drop { opacity: 1; }
       <label><input type="radio" name="aud" value="both"> 電腦聲音加麥克風</label>
     </fieldset>
     <p class="hint" id="recHint"></p>
+    <fieldset class="choices two" id="recRange">
+      <legend>範圍</legend>
+      <label><input type="radio" name="range" value="all"> 從現在開始錄</label>
+      <label><input type="radio" name="range" value="clip"> 只錄一段歌詞</label>
+    </fieldset>
+    <div class="clipbox" id="clipBox" hidden>
+      <div class="grid2">
+        <label class="field"><span>從這句</span><select id="clipFrom"></select></label>
+        <label class="field"><span>錄到這句</span><select id="clipTo"></select></label>
+      </div>
+      <p class="hint" id="clipInfo"></p>
+      <label class="check"><input type="checkbox" id="clipTall"> 換成直式 9:16（Reels、TikTok、Shorts）</label>
+    </div>
     <div class="grid3">
       <label class="field"><span>流暢度</span><select id="recFps"><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
       <label class="field"><span>畫質</span><select id="recQ"><option value="std">標準（8 Mbps）</option><option value="high">高（16 Mbps）</option></select></label>
       <label class="field"><span>檔案格式</span><select id="recFmt"><option value="auto">自動（優先 MP4）</option><option value="webm">WebM</option></select></label>
     </div>
-    <label class="check"><input type="checkbox" id="recCd"> 開始前倒數 3 秒</label>
-    <label class="check"><input type="checkbox" id="recAuto"> 換歌或播完時自動停止</label>
+    <div class="grid2" id="recFlow">
+      <label class="field"><span>換歌時</span><select id="recOnChange"><option value="stop">停止錄影</option><option value="split">每首各存一個檔</option><option value="keep">繼續錄成同一個檔</option></select></label>
+      <div class="field" id="recDirRow" hidden><span>存到</span><button type="button" class="ghost dirpick" id="recDirPick"><span id="recDirName">下載資料夾</span><small>換資料夾</small></button></div>
+    </div>
+    <label class="check" id="recCdRow"><input type="checkbox" id="recCd"> 開始前倒數 3 秒</label>
     <div class="row end"><button type="button" class="ghost" id="recCancel">取消</button><button type="submit" class="primary">開始錄影</button></div>
   </form>
+</dialog>
+
+<dialog class="sheet" id="dlgKaraoke" aria-labelledby="kTitle">
+  <div class="sheet-in">
+    <h2 id="kTitle">卡拉 OK</h2>
+    <p class="lead">找伴奏版來唱最好：在 YouTube 貼伴奏、KTV 或 Instrumental 版的連結，歌詞會自動用原曲的。</p>
+    <div class="microw">
+      <button type="button" class="primary" id="kOn">打開麥克風</button>
+      <div class="meter" aria-hidden="true"><i id="kLevel"></i></div>
+    </div>
+    <label class="check"><input type="checkbox" id="kMon" disabled> 從耳機聽自己的聲音（請戴有線耳機，藍牙耳機的延遲太大）</label>
+    <div class="grid3">
+      <label class="field"><span>人聲大小</span><input type="range" id="kVol" min="0" max="2" step="0.05" value="1"></label>
+      <label class="field"><span>回音</span><input type="range" id="kEcho" min="0" max="1" step="0.05" value="0.3"></label>
+      <label class="field"><span>殘響</span><input type="range" id="kRev" min="0" max="1" step="0.05" value="0.35"></label>
+    </div>
+    <p class="hint">錄影時錄到的是加了回音和殘響的人聲。用喇叭聽自己的聲音會繞回麥克風，發出刺耳的回授聲，偵測到時會自動關掉。</p>
+    <div class="row between">
+      <button type="button" class="ghost" id="kKtv">換成 KTV 畫面</button>
+      <div class="left"><button type="button" class="ghost" data-close>完成</button><button type="button" class="primary" id="kRec">錄下我唱的</button></div>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="sheet" id="dlgSettings" aria-labelledby="setTitle">
@@ -360,6 +485,7 @@ body.dragging .drop { opacity: 1; }
     <label class="check"><input type="checkbox" id="setBlur"> 遠處的歌詞模糊</label>
     <label class="check"><input type="checkbox" id="setInfo"> 顯示封面和歌名</label>
     <label class="check"><input type="checkbox" id="setCredit"> 電影風格：開頭顯示歌名</label>
+    <label class="check"><input type="checkbox" id="setSafe"> 9:16 直式時，標出短影音 App 會蓋住的地方（不會錄進去）</label>
     <div class="grid2">
       <label class="field"><span>對齊</span><select id="setAlign"><option value="auto">自動</option><option value="left">靠左</option><option value="center">置中</option></select></label>
       <label class="field"><span class="rangehead">歌詞大小 <span id="scaleVal">100%</span></span><input type="range" id="setScale" min="0.8" max="1.3" step="0.05" value="1"></label>
@@ -371,10 +497,13 @@ body.dragging .drop { opacity: 1; }
         <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>倒退或快轉 5 秒（YouTube、示範）</dd>
         <dt><kbd>[</kbd><kbd>]</kbd></dt><dd>歌詞提早或延後 0.1 秒，按住 Shift 一次 0.5 秒</dd>
         <dt><kbd>L</kbd></dt><dd>搜尋歌詞</dd>
-        <dt><kbd>T</kbd></dt><dd>切換風格：流光、明體、電影</dd>
+        <dt><kbd>T</kbd></dt><dd>切換風格：流光、明體、電影、KTV</dd>
         <dt><kbd>V</kbd></dt><dd>切換比例：填滿、16:9、9:16、1:1</dd>
         <dt><kbd>R</kbd></dt><dd>開始或停止錄影</dd>
         <dt><kbd>P</kbd></dt><dd>錄影時暫停或繼續</dd>
+        <dt><kbd>N</kbd><kbd>Shift</kbd>+<kbd>P</kbd></dt><dd>下一首、上一首（YouTube 播放清單）</dd>
+        <dt><kbd>Q</kbd></dt><dd>打開播放清單</dd>
+        <dt><kbd>K</kbd></dt><dd>卡拉 OK：麥克風、回音</dd>
         <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
         <dt><kbd>H</kbd></dt><dd>隱藏或顯示介面</dd>
       </dl>
@@ -588,6 +717,19 @@ function downloadBlob(blob, name) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+/* save into a folder the user picked (File System Access API); never overwrite an existing file */
+async function writeToDir(dir, name, blob) {
+  let fname = name;
+  for (let k = 2; k < 50; k++) {
+    try { await dir.getFileHandle(fname); } catch (e) { break; }
+    fname = name.replace(/(\.[^.]+)$/, ` (${k})$1`);
+  }
+  const fh = await dir.getFileHandle(fname, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+  return fname;
+}
 function safeName(s) {
   return (String(s || 'lyrics').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'lyrics').slice(0, 60);
 }
@@ -723,6 +865,29 @@ const LRC = (() => {
     return out;
   }
 
+  /* a good stretch for a short clip: the longest run of lines that come back later (the chorus), at most maxLen seconds */
+  function suggestClip(E, maxLen = 30) {
+    const L = [];
+    E.forEach((e, i) => { if (e.type === 'line') L.push(i); });
+    if (!L.length) return null;
+    const key = s => String(s || '').toLowerCase().normalize('NFKC').replace(/[\s\p{P}\p{S}]/gu, '');
+    const n = new Map();
+    for (const i of L) { const k = key(E[i].text); if (k) n.set(k, (n.get(k) || 0) + 1); }
+    const rep = i => (n.get(key(E[i].text)) || 0) >= 2;
+    let best = null;
+    for (let a = 0; a < L.length; a++) {
+      if (!rep(L[a])) continue;
+      let b = a;
+      while (b + 1 < L.length && rep(L[b + 1]) && E[L[b + 1]].fillEnd - E[L[a]].time <= maxLen) b++;
+      if (b > a && (!best || b - a > best.len)) best = { from: L[a], to: L[b], len: b - a };
+    }
+    if (best) return { from: best.from, to: best.to };
+    const start = L[Math.min(L.length - 1, Math.floor(L.length / 4))]; // nothing repeats: ~20 s from a quarter of the way in
+    let to = start;
+    for (const i of L) if (i >= start && E[i].fillEnd - E[start].time <= 20) to = i;
+    return { from: start, to };
+  }
+
   function activeIndex(E, t) {
     let lo = 0, hi = E.length - 1, ans = -1;
     while (lo <= hi) {
@@ -745,7 +910,7 @@ const LRC = (() => {
     return plain ? { kind: 'plain', lines: plain } : { kind: 'empty', lines: 0 };
   }
 
-  return { parse, buildTimeline, activeIndex, estimate, inspect };
+  return { parse, buildTimeline, activeIndex, estimate, inspect, suggestClip };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = LRC;
 
@@ -1213,24 +1378,56 @@ function parseVideoTitle(title, author) {
   return { title: t, artist: a, inst };
 }
 
+/* ---------- YouTube: single songs, YouTube / YouTube Music playlists, or your own list of links ---------- */
+const YT_PRIVATE_LISTS = /^(LL|LM|WL)$/; // liked videos, liked music, watch later: only visible to their owner
+
 class YouTubeSource {
   constructor(app) {
     this.app = app; this.player = null; this.ready = false; this.videoId = null; this.track = null;
     this.active = false; this.timer = 0; this.lastT = -1; this.lastPlaying = null; this.n = 0;
     this.canSeek = true; this.hasVolume = true;
+    this.pending = null; this.kind = 'video'; this.errors = 0; this.jumpTo = null;
+    this.shuffle = false; this.loop = false; this.titles = Store.get('ytTitles', {});
   }
-  static parseId(input) {
+  /* one link → { id, list, index }; index is 0-based */
+  static parseLink(input) {
     const s = String(input || '').trim();
-    if (/^[\w-]{11}$/.test(s)) return s;
+    if (/^[\w-]{11}$/.test(s)) return { id: s, list: null, index: null };
     try {
       const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
-      if (/(^|\.)youtu\.be$/i.test(u.hostname)) return u.pathname.slice(1, 12) || null;
+      if (!/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i.test(u.hostname)) return null;
+      let id = null;
+      if (/(^|\.)youtu\.be$/i.test(u.hostname)) id = u.pathname.slice(1, 12) || null;
       const v = u.searchParams.get('v');
-      if (v && /^[\w-]{11}/.test(v)) return v.slice(0, 11);
-      const m = u.pathname.match(/\/(?:embed|shorts|live|v)\/([\w-]{11})/);
-      if (m) return m[1];
-    } catch (e) { /* not a URL */ }
-    return null;
+      if (!id && v && /^[\w-]{11}/.test(v)) id = v.slice(0, 11);
+      const m = !id && u.pathname.match(/\/(?:embed|shorts|live|v)\/([\w-]{11})/);
+      if (m) id = m[1];
+      if (id && !/^[\w-]{11}$/.test(id)) id = null;
+      const list = (u.searchParams.get('list') || '').trim() || null;
+      const ix = parseInt(u.searchParams.get('index'), 10);
+      if (!id && !list) return null;
+      return { id, list, index: ix > 0 ? ix - 1 : null };
+    } catch (e) { return null; }
+  }
+  static parseId(input) { const r = YouTubeSource.parseLink(input); return r ? r.id : null; }
+  /* what the user pasted: one song, one playlist, or several links (one per line) */
+  static parseInput(text) {
+    const tokens = String(text || '').split(/[\s,，]+/).filter(Boolean);
+    const links = tokens.map(t => YouTubeSource.parseLink(t)).filter(Boolean);
+    if (!links.length) return null;
+    if (links.length === 1) {
+      const l = links[0];
+      if (l.list && YT_PRIVATE_LISTS.test(l.list)) return l.id ? { kind: 'video', id: l.id, privateList: true } : { kind: 'private' };
+      // RD… is YouTube's endless auto-generated mix (every YouTube Music share link has one): just play the song
+      if (l.list && /^RD/.test(l.list) && l.id) return { kind: 'video', id: l.id };
+      if (l.list) return { kind: 'list', list: l.list, id: l.id, index: l.index };
+      return { kind: 'video', id: l.id };
+    }
+    const ids = links.map(l => l.id).filter(Boolean);
+    const skipped = links.length - ids.length;
+    if (!ids.length) return { kind: 'list', list: links[0].list, id: null, index: null, skipped: links.length - 1 };
+    if (ids.length === 1) return { kind: 'video', id: ids[0], skipped };
+    return { kind: 'queue', ids: ids.slice(0, 200), skipped: skipped + Math.max(0, ids.length - 200) };
   }
   loadApi() {
     if (window.YT && window.YT.Player) return Promise.resolve();
@@ -1246,45 +1443,161 @@ class YouTubeSource {
     });
     return this.apiP;
   }
-  async play(input) {
+  /* play what was pasted; append = add the songs to the current list instead */
+  async play(input, { append = false } = {}) {
     if (!Env.can('youtube')) { toast('直接打開 HTML 檔時，YouTube 播放器不能用。請改用線上版，或用 start.bat 開啟。', 0); return false; }
-    const id = YouTubeSource.parseId(input);
-    if (!id) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲網址', 5000); return false; }
-    this.videoId = id;
-    Store.set('yt.last', String(input).trim());
-    this.track = null;
+    const req = YouTubeSource.parseInput(input);
+    if (!req) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲或歌單網址', 5000); return false; }
+    if (req.kind === 'private') { toast('「喜歡的音樂」和「稍後觀看」是私人清單，這裡讀不到。請建立一個公開或不公開的歌單再貼上。', 0); return false; }
+    if (req.privateList) toast('那個清單是私人的，這裡讀不到，先播這一首。', 6000);
+    if (req.skipped) toast(`有 ${req.skipped} 個連結不是單一影片，已略過（自己的清單只能放影片連結）`, 6000);
+    let action = req, last = String(input).trim();
+    if (append && this.ready && this.player && this.track) {
+      if (req.kind === 'list') { toast('整個歌單不能加進清單，請貼影片連結', 5000); return false; }
+      const list = this.isList();
+      const ids = (list ? this.playlist() : [this.track.vid]).concat(req.kind === 'queue' ? req.ids : [req.id]).slice(0, 200);
+      action = { kind: 'queue', ids, index: list ? this.player.getPlaylistIndex() : 0, start: this.player.getCurrentTime() || 0, keep: true };
+      last = ids.map(id => 'https://youtu.be/' + id).join('\n');
+      toast(`已加入清單，現在共 ${ids.length} 首`, 4000);
+    }
+    Store.set('yt.last', last);
+    this.videoId = action.id || (action.ids && action.ids[0]) || this.videoId || 'list';
+    if (!action.keep) this.track = null;
+    this.kind = action.kind === 'video' ? 'video' : action.kind;
+    this.errors = 0;
     try { await this.loadApi(); } catch (e) { toast('載入不了 YouTube 播放器，檢查網路後再試', 0); return false; }
     this.app.showYtCard(true);
-    if (this.player && this.ready) this.player.loadVideoById(id);
+    this.pending = action;
+    if (this.player && this.ready) this.apply();
     else if (!this.player) {
       this.player = new YT.Player('ytplayer', {
-        width: 356, height: 200, videoId: id,
+        width: 356, height: 200,
         playerVars: { autoplay: 1, playsinline: 1, rel: 0, origin: location.origin },
         events: {
           onReady: () => {
             this.ready = true;
             this.setVolume(Store.get('yt.vol', 100));
-            try { this.player.playVideo(); } catch (e) { /* ignore */ }
+            this.apply();
           },
+          onStateChange: e => this.onState(e),
           onError: e => this.onErr(e),
         },
       });
     }
     return true;
   }
+  apply() {
+    const a = this.pending, p = this.player;
+    if (!a || !p) return;
+    this.pending = null;
+    try {
+      if (a.kind === 'video') p.loadVideoById(a.id);
+      else if (a.kind === 'queue') p.loadPlaylist(a.ids, a.index || 0, a.start || 0);
+      else if (a.kind === 'list') {
+        p.loadPlaylist({ list: a.list, listType: 'playlist', index: a.index || 0 });
+        this.jumpTo = a.index == null && a.id ? a.id : null; // the link named a song inside the list: start there
+        clearTimeout(this.listCheck);
+        this.listCheck = setTimeout(() => { // a list the player cannot open: fall back to the song in the link
+          if (this.isList() || (this.track && this.track.vid)) return;
+          if (a.id) { this.kind = 'video'; p.loadVideoById(a.id); toast('這個歌單在這裡打不開，先播連結裡的這首', 6000); }
+          else toast('這個歌單在這裡打不開，可能是私人的或已刪除', 0);
+        }, 3500);
+      }
+      this.optsDue = a.kind !== 'video';
+    } catch (e) { toast('播放器還沒準備好，請再按一次播放', 5000); }
+  }
+  onState(e) {
+    const p = this.player, st = e && e.data;
+    this.n = 0; // something changed: read the video's title on the next tick instead of within a second
+    if (st === 1) this.errors = 0;
+    if (!p) return;
+    try {
+      if (this.optsDue && this.isList()) { this.optsDue = false; p.setShuffle(this.shuffle); p.setLoop(this.loop); }
+      if (this.jumpTo) {
+        const list = this.playlist(), i = list.indexOf(this.jumpTo);
+        if (list.length) { this.jumpTo = null; if (i > 0 && i !== p.getPlaylistIndex()) p.playVideoAt(i); }
+      }
+      if (st === 0) {
+        const list = this.playlist(), i = p.getPlaylistIndex();
+        if (!list.length || (i >= list.length - 1 && !this.loop)) this.app.onEnded();
+      }
+    } catch (err) { /* player busy */ }
+    if (this.app.onQueueChange) this.app.onQueueChange();
+  }
   onErr(e) {
     const c = e && e.data;
+    if (this.isList() && (c === 100 || c === 101 || c === 150)) { // skip it and keep the list going
+      this.errors++;
+      if (this.errors <= 5) {
+        toast(`跳過一首不能在這裡播放的影片（第 ${this.player.getPlaylistIndex() + 1} 首）`, 5000);
+        setTimeout(() => { try { this.player.nextVideo(); } catch (err) { /* ignore */ } }, 700);
+      } else toast('連續好幾首都不能在這裡播放，清單先停在這裡。', 0);
+      return;
+    }
     if (c === 2) toast('這個影片網址不正確', 6000);
     else if (c === 5) toast('播放器出錯，換一首試試', 6000);
-    else if (c === 100) toast('找不到這個影片，可能被刪除或設成私人', 0);
+    else if (c === 100) toast('找不到這個影片或歌單，可能被刪除或設成私人', 0);
     else if (c === 101 || c === 150) toast('版權方不允許在其他網站播放這支影片。換一個版本試試，例如 YouTube Music 的歌曲連結。', 0);
     else if (c === 153) toast('播放器拿不到網址來源。請改用線上版，或用 start.bat 開啟程式。', 0);
     else toast('播放失敗（錯誤 ' + c + '）', 0);
   }
+  /* ---- playlist ---- */
+  playlist() { try { return (this.player && this.ready && this.player.getPlaylist && this.player.getPlaylist()) || []; } catch (e) { return []; } }
+  isList() { return this.playlist().length > 1; }
+  get hasQueue() { return this.active && this.isList(); }
+  queueInfo() {
+    const ids = this.playlist();
+    let index = -1;
+    try { index = this.player.getPlaylistIndex(); } catch (e) { /* ignore */ }
+    return { ids, index, shuffle: this.shuffle, loop: this.loop, kind: this.kind };
+  }
+  next() { try { if (this.isList()) this.player.nextVideo(); } catch (e) { /* ignore */ } }
+  prev() {
+    try {
+      if ((this.player.getCurrentTime() || 0) > 3 || !this.isList()) this.seekTo(0); // like a CD player: first back to the start
+      else this.player.previousVideo();
+    } catch (e) { /* ignore */ }
+  }
+  playAt(i) { try { this.player.playVideoAt(i); } catch (e) { /* ignore */ } }
+  setShuffle(on) { this.shuffle = !!on; try { this.player.setShuffle(this.shuffle); } catch (e) { /* ignore */ } }
+  setLoop(on) { this.loop = !!on; try { this.player.setLoop(this.loop); } catch (e) { /* ignore */ } }
+  removeAt(i) {
+    const ids = this.playlist(), cur = this.player.getPlaylistIndex();
+    if (i < 0 || i >= ids.length || ids.length < 2) return;
+    ids.splice(i, 1);
+    const playing = i === cur;
+    const index = playing ? Math.min(i, ids.length - 1) : cur - (i < cur ? 1 : 0);
+    this.kind = 'queue';
+    this.pending = { kind: 'queue', ids, index, start: playing ? 0 : this.player.getCurrentTime() || 0 };
+    Store.set('yt.last', ids.map(id => 'https://youtu.be/' + id).join('\n'));
+    this.apply();
+  }
+  /* titles for the list: the ones already played, plus YouTube's public oEmbed lookup when the browser allows it */
+  titleOf(id) { return this.titles[id] || null; }
+  rememberTitle(id, t) {
+    this.titles[id] = t;
+    const keys = Object.keys(this.titles);
+    if (keys.length > 400) for (const k of keys.slice(0, keys.length - 400)) delete this.titles[k];
+    Store.set('ytTitles', this.titles);
+  }
+  async fetchTitles(ids, onEach) {
+    if (this.oembedOff) return;
+    for (const id of ids) {
+      if (this.titles[id] || !this.active) continue;
+      try {
+        const r = await fetchT('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id), {}, 6000);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const m = parseVideoTitle(j.title, j.author_name);
+        this.rememberTitle(id, { title: m.title || j.title, artist: m.artist || j.author_name || '' });
+        if (onEach) onEach(id);
+      } catch (e) { if (e instanceof TypeError) { this.oembedOff = true; return; } }
+    }
+  }
   start() {
     this.active = true;
     if (this.player) this.app.showYtCard(true);
-    if (!this.videoId) this.app.onIdle({ key: 'youtube-empty', title: '貼上一首歌的連結', hint: '點上方的 YouTube 開始', status: 'YouTube 待命' });
+    if (!this.videoId) this.app.onIdle({ key: 'youtube-empty', title: '貼上一首歌或一個歌單的連結', hint: '點上方的 YouTube 開始', status: 'YouTube 待命' });
     this.tick();
   }
   stop() {
@@ -1294,7 +1607,7 @@ class YouTubeSource {
     this.app.showYtCard(false);
   }
   /* the player's getters read state it already received, so polling them is cheap;
-     title and length only change with the video, so read those once a second */
+     title and length only change with the video, so read those once a second (or right after a state change) */
   tick() {
     if (!this.active) return;
     const p = this.player;
@@ -1315,7 +1628,9 @@ class YouTubeSource {
               art: ['https://i.ytimg.com/vi/' + d.video_id + '/maxresdefault.jpg', 'https://i.ytimg.com/vi/' + d.video_id + '/hqdefault.jpg'],
               source: 'youtube',
             };
+            if (!this.titles[d.video_id] || this.titles[d.video_id].title !== this.track.title) this.rememberTitle(d.video_id, { title: this.track.title, artist: this.track.artist });
             this.lastT = -1;
+            if (this.app.onQueueChange) this.app.onQueueChange();
           }
         }
         if (this.track && (t !== this.lastT || playing !== this.lastPlaying)) {
@@ -1330,6 +1645,7 @@ class YouTubeSource {
     if (!this.player || !this.ready) return;
     if (this.player.getPlayerState() === 1) this.player.pauseVideo(); else this.player.playVideo();
   }
+  ensurePlaying() { try { if (this.player && this.ready && this.player.getPlayerState() !== 1) this.player.playVideo(); } catch (e) { /* ignore */ } }
   seekTo(t) {
     if (!this.player || !this.ready) return;
     const d = this.player.getDuration ? this.player.getDuration() : 0;
@@ -1395,6 +1711,7 @@ class DemoSource {
     this.timer = setTimeout(() => this.tick(), 250);
   }
   togglePlay() { this.playing = !this.playing; this.app.onPlayback(this.track, this.pos, this.playing, performance.now()); }
+  ensurePlaying() { if (!this.playing) this.togglePlay(); }
   seek(d) { this.jump(this.pos + d); }
   seekTo(t) { this.jump(t); }
   jump(t) { this.pos = clamp(t, 0, this.track.duration - 0.05); this.last = performance.now(); this.app.onPlayback(this.track, this.pos, this.playing, this.last); }
@@ -1424,8 +1741,14 @@ const THEMES = {
     inA: [0.3, 0.3], unA: 1, glow: 0, softBehind: 0,
     dim: 0.34, vignette: 0.75, grain: 0.12, grainFps: 24, sat: 1.05, blur: 4, kenBurns: true, credit: true, ink: [255, 255, 255],
   },
+  ktv: {
+    label: 'KTV', desc: '下方兩行輪流，唱過的字變色', mode: 'ktv', font: 'sans', weight: 800,
+    size: [76, 66], gapK: 0.62, rowK: 1.2, align: null, inactiveScale: 1,
+    inA: [1, 1], unA: 1, glow: 0, softBehind: 0,
+    dim: 0.36, vignette: 0.55, grain: 0.04, grainFps: 0, sat: 1.4, blur: 7, kenBurns: false, credit: false, ink: [255, 255, 255],
+  },
 };
-const THEME_ORDER = ['flow', 'serif', 'cinema'];
+const THEME_ORDER = ['flow', 'serif', 'cinema', 'ktv'];
 const famOf = T => (T.font === 'serif' ? FONT_SERIF : FONT_SANS);
 
 const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
@@ -1460,6 +1783,33 @@ function rowFill(r, P) {
   if (P >= m[m.length - 1] + 1) return m.length;
   for (let j = 0; j < m.length; j++) if (P < m[j] + 1) return j + Math.max(0, P - m[j]);
   return m.length;
+}
+/* KTV: two rows, lines alternate between them, and each verse starts on the top row after a break.
+   A line shows up when the line before it starts (a verse's first two lines a few seconds early, with count-in dots)
+   and leaves when the line two after it shows up. One item per sung line. */
+function ktvSchedule(E, lead = 3.5) {
+  const out = [];
+  E.forEach((e, i) => {
+    if (e.type !== 'line') return;
+    const prev = out[out.length - 1];
+    const brk = !prev || e.time - prev.fillEnd >= 3.5;
+    out.push({ i, row: brk ? 0 : 1 - prev.row, brk, time: e.time, fillEnd: e.fillEnd, appear: 0, hide: 0, dots: false });
+  });
+  for (let k = 0; k < out.length; k++) {
+    const o = out[k], p = out[k - 1];
+    if (o.brk) {
+      o.appear = Math.max(p ? p.fillEnd + 0.6 : 0, o.time - lead, 0);
+      o.dots = o.time - o.appear >= 1.6;
+    } else o.appear = p.brk ? p.appear : p.time;
+  }
+  for (let k = 0; k < out.length; k++) {
+    const o = out[k], n1 = out[k + 1], n2 = out[k + 2];
+    const same1 = n1 && !n1.brk, same2 = same1 && n2 && !n2.brk;
+    let hide = same2 ? n2.appear : same1 ? Math.max(o.fillEnd + 0.8, n1.time + 0.4) : o.fillEnd + 1.2;
+    for (let j = k + 1; j < out.length; j++) if (out[j].row === o.row) { hide = Math.min(hide, out[j].appear); break; }
+    o.hide = Math.max(hide, o.appear + 0.3);
+  }
+  return out;
 }
 function charTimes(words) {
   const st = [], en = [];
@@ -1610,10 +1960,26 @@ class Renderer {
     g.font = T.size[land ? 0 : 1] * u * s;
     g.gap = g.font * T.gapK;
     g.rowH = g.font * T.rowK;
+    if (T.mode === 'ktv') {
+      const tall = ar < 0.8;
+      g.font = (tall ? T.size[1] * W / 1080 : T.size[0] * u) * s;
+      g.padL = W * (tall ? 0.07 : 0.1); g.padR = W * (tall ? 0.14 : 0.1); // tall: keep clear of the buttons down the right side of Reels / TikTok
+      g.maxW = W - g.padL - g.padR;
+      g.rowGap = g.font * 1.42;
+      g.rowY = tall ? [H * 0.58, H * 0.58 + g.rowGap] : [H * 0.82 - g.rowGap, H * 0.82];
+      g.header = true;
+      g.artSize = (tall ? 190 : 150) * u;
+      g.artX = tall ? W * 0.075 : W * 0.06; g.artY = tall ? Math.max(150 * u, H * 0.13) : H * 0.08;
+      g.infoX = g.artX + g.artSize + 34 * u; g.infoW = tall ? W - g.infoX - W * 0.075 : W * 0.36;
+      if (!tall) { g.progX = g.infoX; g.progW = g.infoW; g.progY = g.artY + g.artSize * 0.44 + 82 * u; }
+      g.lx = g.padL; g.lw = W - g.padL - g.padR; g.cx = W / 2; g.align = 'left';
+      g.top = H * 0.3; g.bottom = tall ? H * 0.8 : H * 0.95; g.anchor = g.rowY[0];
+      return g;
+    }
     if (T.mode === 'subtitle') {
       g.bar = land ? Math.max(0, (H - W / 2.39) / 2) : 0;
-      g.subY = land ? H - g.bar - 120 * u : H * 0.74;
-      g.maxW = land ? W * 0.7 : W * 0.84;
+      g.subY = land ? H - g.bar - 120 * u : H * (ar < 0.8 ? 0.68 : 0.74); // tall: clear of the bottom of Reels / TikTok
+      g.maxW = land ? W * 0.7 : W * (ar < 0.8 ? 0.78 : 0.84);
       g.cx = W / 2; g.lw = g.maxW; g.lx = (W - g.maxW) / 2; g.align = 'center';
       return g;
     }
@@ -1628,11 +1994,12 @@ class Renderer {
       const tall = ar < 0.8;
       g.header = true;
       g.artSize = (tall ? 190 : 150) * u;
-      g.artX = W * 0.075; g.artY = (tall ? 150 : 72) * u;
+      // tall frames keep clear of the top and bottom bands that Reels / TikTok / Shorts cover with their buttons
+      g.artX = W * 0.075; g.artY = tall ? Math.max(150 * u, H * 0.13) : 72 * u;
       g.infoX = g.artX + g.artSize + 34 * u; g.infoW = W - g.infoX - W * 0.075;
-      g.lx = W * 0.075; g.lw = W * 0.85;
-      g.top = info ? g.artY + g.artSize + 120 * u : H * 0.08;
-      g.bottom = H * 0.95;
+      g.lx = W * (tall ? 0.09 : 0.075); g.lw = W * (tall ? 0.82 : 0.85);
+      g.top = info ? g.artY + g.artSize + 120 * u : H * (tall ? 0.14 : 0.08);
+      g.bottom = H * (tall ? 0.78 : 0.95);
       g.anchor = g.top + (g.bottom - g.top) * (info ? 0.3 : 0.36);
     }
     g.align = this.opts.align === 'auto' ? (T.align || (land ? 'left' : 'center')) : this.opts.align;
@@ -1713,6 +2080,23 @@ class Renderer {
         x.font = this.mainFont(g.font * 0.7);
         this.plainRows = (this.lyr.plain || []).map(t => (t.trim() ? this.wrap(t.trim(), g.lw) : []));
       }
+    } else if (this.T.mode === 'ktv') {
+      for (const e of E) {
+        e.C = null;
+        if (e.type !== 'line') continue;
+        let px = g.font;
+        x.font = this.mainFont(px);
+        const w = this.measure(e.text);
+        if (w > g.maxW) { px = Math.max(g.font * 0.62, px * g.maxW / w); x.font = this.mainFont(px); } // shrink a long line before wrapping it
+        const rows = this.wrap(e.text, g.maxW);
+        const tc = Array.from(e.text);
+        mapRows(rows, tc);
+        const subPx = px * 0.46;
+        let subRows = [];
+        if (e.sub) { x.font = this.subFont(subPx); subRows = this.wrap(e.sub.replace(/\n/g, ' / '), g.maxW); }
+        e.K = { px, rows, subRows, subPx, textLen: tc.length, charT: e.words ? charTimes(e.words) : null };
+      }
+      this.ktvPlan = ktvSchedule(E);
     } else {
       for (const e of E) e.C = null;
     }
@@ -1730,7 +2114,10 @@ class Renderer {
     x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetX = 0; x.shadowOffsetY = 0;
     this.drawBackground(dt);
     if (this.T.mode === 'subtitle') this.drawCinema(songT, lyricT, dt);
-    else {
+    else if (this.T.mode === 'ktv') {
+      if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
+      this.drawKtv(songT, lyricT, dt);
+    } else {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
       this.drawLyrics(lyricT, dt);
     }
@@ -1895,7 +2282,7 @@ class Renderer {
       y += 48 * u;
       x.font = `500 ${(28 * u).toFixed(1)}px ${fam}`; x.fillStyle = 'rgba(255,255,255,0.64)';
       x.fillText(ellipsize(x, tr.artist, g.infoW), g.infoX, y);
-      this.drawProgress(g.lx, g.artY + g.artSize + 42 * u, g.lw, u, pos, dur);
+      this.drawProgress(g.progX != null ? g.progX : g.lx, g.progY != null ? g.progY : g.artY + g.artSize + 42 * u, g.progW != null ? g.progW : g.lw, u, pos, dur);
     }
     x.restore();
   }
@@ -1979,8 +2366,7 @@ class Renderer {
     if (k >= r.chars.length) return r.pre[r.chars.length];
     return r.pre[k] + (r.pre[k + 1] - r.pre[k]) * f;
   }
-  progressChars(e, t) {
-    const L = e.L;
+  progressChars(e, t, L = e.L) {
     if (L.charT) {
       const { st, en } = L.charT;
       if (!st.length || t < st[0]) return 0;
@@ -2121,6 +2507,100 @@ class Renderer {
     x.restore();
   }
 
+  /* ---------- KTV: two rows at the bottom, outlined text, sung characters change colour ---------- */
+  ktvColor() {
+    const a = this.palette.accent;
+    if (this._kc && this._kcFor === a) return this._kc;
+    const [h, sat, l] = rgbToHsl(a[0], a[1], a[2]);
+    this._kcFor = a;
+    this._kc = rgba(hslToRgb(h, Math.max(sat, 0.78), clamp(l, 0.5, 0.6)), 1); // vivid enough to read against white
+    return this._kc;
+  }
+  ktvText(r, rx, y, px, nfill) {
+    const x = this.x;
+    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(8,10,24,0.92)';
+    x.strokeText(r.text, rx, y);
+    x.fillStyle = '#fff'; x.fillText(r.text, rx, y);
+    if (nfill <= 0) return;
+    const edge = rx + this.charX(r, nfill);
+    x.save();
+    x.beginPath(); x.rect(rx - px, y - px * 1.2, edge - rx + px, px * 2.4); x.clip();
+    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(255,255,255,0.96)'; x.strokeText(r.text, rx, y);
+    x.fillStyle = this.ktvColor(); x.fillText(r.text, rx, y);
+    x.restore();
+  }
+  drawKtv(songT, t, dt) {
+    const x = this.x, g = this.g, W = this.W, H = this.H, E = this.lyr.entries, st = this.lyr.status;
+    const top = g.rowY[0] - g.font * 1.9;
+    const shade = x.createLinearGradient(0, top, 0, H); // a soft shade keeps the rows readable on any cover
+    shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(0.5, 'rgba(0,0,0,0.26)'); shade.addColorStop(1, 'rgba(0,0,0,0.42)');
+    x.fillStyle = shade; x.fillRect(0, top, W, H - top);
+    x.save();
+    x.textBaseline = 'middle'; x.textAlign = 'left'; x.lineJoin = 'round'; x.miterLimit = 2;
+    const center = (text, px, y, weight = 800) => {
+      x.font = `${weight} ${px.toFixed(1)}px ${FONT_SANS}`;
+      const s = ellipsize(x, text, g.lw), w = this.measure(s);
+      this.ktvText({ text: s, chars: Array.from(s) }, W / 2 - w / 2, y, px, 0);
+    };
+    if (st !== 'synced' || !E.length) {
+      this.curLine = '';
+      const msg = st === 'plain' ? '這首只有未同步的歌詞，換成流光或明體風格來看' : this.stateText()[0];
+      x.globalAlpha = st === 'loading' ? 0.55 + 0.35 * Math.sin(this.anim * 3) : 0.9;
+      center(msg, g.font * 0.6, (g.rowY[0] + g.rowY[1]) / 2, 700);
+      x.restore();
+      return;
+    }
+    const plan = this.ktvPlan || [];
+    const first = plan[0];
+    if (first && this.track && t < first.appear && first.appear >= 2.5) { // intro: song title, like a KTV title card
+      x.globalAlpha = clamp((t - 0.3) / 0.9, 0, 1) * clamp((first.appear - 0.2 - t) / 0.6, 0, 1);
+      if (x.globalAlpha > 0.01) {
+        center(this.track.title, g.font * 1.05, g.rowY[0]);
+        if (this.track.artist) center(this.track.artist, g.font * 0.5, g.rowY[1], 600);
+      }
+    }
+    let cur = '';
+    for (const o of plan) {
+      if (t < o.appear || t > o.hide) continue;
+      const e = E[o.i], K = e.K;
+      if (!K) continue;
+      if (t >= e.time && t < e.end) cur = e.text;
+      x.globalAlpha = clamp((t - o.appear) / 0.12, 0, 1) * clamp((o.hide - t) / 0.12, 0, 1);
+      const sung = this.opts.karaoke ? this.progressChars(e, t, K) : t >= e.time ? K.textLen : 0;
+      const rh = K.px * 1.16, n = K.rows.length;
+      const subH = K.subRows.length ? K.px * 0.18 + K.subRows.length * K.subPx * 1.3 : 0;
+      let y = o.row === 0 ? g.rowY[0] - (n - 1) * rh - subH : g.rowY[1];
+      x.font = this.mainFont(K.px);
+      const firstX = o.row === 0 ? g.padL : W - g.padR - K.rows[0].w;
+      if (o.dots && t < o.time) { // count-in: four dots, one goes out every 0.8 s
+        const nd = Math.min(4, Math.ceil((o.time - t) / 0.8)), r = K.px * 0.11, sp = K.px * 0.38;
+        for (let k = 0; k < nd; k++) {
+          x.beginPath(); x.arc(firstX + r + k * sp, y - K.px * 0.86, r, 0, Math.PI * 2);
+          x.fillStyle = this.ktvColor(); x.fill();
+          x.lineWidth = r * 0.45; x.strokeStyle = 'rgba(255,255,255,0.9)'; x.stroke();
+        }
+      }
+      for (const r of K.rows) {
+        const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
+        this.ktvText(r, rx, y, K.px, rowFill(r, sung));
+        y += rh;
+      }
+      if (subH) {
+        x.font = this.subFont(K.subPx);
+        y += K.px * 0.18 - rh / 2 + K.subPx * 0.65;
+        for (const r of K.subRows) {
+          const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
+          x.lineWidth = K.subPx * 0.18; x.strokeStyle = 'rgba(8,10,24,0.85)'; x.strokeText(r.text, rx, y);
+          x.fillStyle = 'rgba(255,255,255,0.9)'; x.fillText(r.text, rx, y);
+          y += K.subPx * 1.3;
+        }
+        x.font = this.mainFont(K.px);
+      }
+    }
+    this.curLine = cur;
+    x.restore();
+  }
+
   /* ---------- 電影: one subtitle line at a time ---------- */
   cineRows(e) {
     const g = this.g, x = this.x;
@@ -2195,18 +2675,21 @@ class Renderer {
 /* ---------- recorder: the canvas itself + optional shared audio / microphone ----------
    states: idle → ready (permissions granted, countdown running) → recording ⇄ paused → idle
    WebM arrives in 1 s chunks while recording. Chrome's MP4 writer hands everything over only at the end,
-   so for MP4 the size is estimated from the bitrate, and an empty file can only be caught after stopping. */
+   so for MP4 the size is estimated from the bitrate, and an empty file can only be caught after stopping.
+   A recording is made of segments: split() closes the current file and starts the next one on the same
+   picture and sound, so a playlist can become one file per song without asking for permissions again. */
 class Recorder {
   constructor(canvas) {
     this.canvas = canvas;
-    this.mr = null; this.cleanup = []; this.chunks = []; this.bytes = 0;
+    this.seg = null; this.cleanup = []; this.bytes = 0; this.segCount = 0;
     this.state = 'idle';
-    this.onstate = null; this.onwarn = null;
+    this.onstate = null; this.onwarn = null; this.onsegment = null;
     this.maxBytes = 1.5 * 1024 * 1024 * 1024; // the recording lives in memory until saved
     this.activeMs = 0; this.resumedAt = 0; this.warnedSize = false; this.bps = 0; this.streaming = false;
   }
   get active() { return this.state === 'recording' || this.state === 'paused'; }
   get busy() { return this.state !== 'idle'; }
+  get mr() { return this.seg ? this.seg.mr : null; }
   static mime(withAudio, format = 'auto') {
     const mp4 = withAudio
       ? ['video/mp4;codecs=avc1.64002a,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1.64002a,opus', 'video/mp4;codecs=avc1,opus']
@@ -2217,7 +2700,7 @@ class Recorder {
   }
 
   /* step 1 — must be called straight from a click: getDisplayMedia needs the user gesture */
-  async prepare({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false, format = 'auto' } = {}) {
+  async prepare({ audio = 'none', fps = 60, bitrate = 12e6, preferTab = false, format = 'auto', micTrack = null } = {}) {
     if (this.busy) throw Object.assign(new Error('BUSY'), { code: 'BUSY' });
     if (!window.MediaRecorder || !this.canvas.captureStream) throw Object.assign(new Error('UNSUPPORTED'), { code: 'UNSUPPORTED' });
     this.state = 'ready';
@@ -2237,9 +2720,12 @@ class Recorder {
         streams.push(new MediaStream(at));
       }
       if (audio === 'mic' || audio === 'both') {
-        const ms = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
-        this.cleanup.push(() => ms.getTracks().forEach(t => t.stop()));
-        streams.push(ms);
+        if (micTrack && micTrack.readyState === 'live') streams.push(new MediaStream([micTrack])); // the karaoke mic, with its echo; it stays on after recording
+        else {
+          const ms = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
+          this.cleanup.push(() => ms.getTracks().forEach(t => t.stop()));
+          streams.push(ms);
+        }
       }
       const v = this.canvas.captureStream(fps);
       this.cleanup.push(() => v.getTracks().forEach(t => t.stop()));
@@ -2257,70 +2743,90 @@ class Recorder {
       const opts = { videoBitsPerSecond: bitrate };
       if (mime) opts.mimeType = mime;
       if (audioTracks.length) opts.audioBitsPerSecond = 192000;
-      const mr = new MediaRecorder(mix, opts);
+      this.mix = mix; this.mrOpts = opts;
+      this.seg = this.makeSeg();
       this.bps = bitrate + (audioTracks.length ? 192000 : 0);
-      mr.ondataavailable = ev => this.onData(ev);
-      mr.onstop = () => this.finish();
-      mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 0); };
-      this.mr = mr;
-      this.mime = mr.mimeType || mime || 'video/webm';
+      this.mime = this.seg.mr.mimeType || mime || 'video/webm';
       this.streaming = /webm/i.test(this.mime);
       this.hasAudio = audioTracks.length > 0;
     } catch (e) {
-      this.mr = null; this.release(); this.state = 'idle';
+      this.seg = null; this.release(); this.state = 'idle';
       throw e;
     }
   }
-  /* step 2 — after the countdown */
-  begin() {
-    if (this.state !== 'ready' || !this.mr) return;
-    this.chunks = []; this.bytes = 0; this.warnedSize = false; this.discard = false; this.stopReason = null;
+  makeSeg(meta = null) {
+    const mr = new MediaRecorder(this.mix, this.mrOpts);
+    const seg = { mr, chunks: [], bytes: 0, meta, elapsed: 0, split: false };
+    mr.ondataavailable = ev => this.onData(ev, seg);
+    mr.onstop = () => this.onSegStop(seg);
+    mr.onerror = ev => { console.error(ev); toast('錄影出錯：' + ((ev.error && ev.error.message) || '未知錯誤'), 0); };
+    return seg;
+  }
+  /* step 2 — after the countdown; meta travels with the file (which song it was) */
+  begin(meta = null) {
+    if (this.state !== 'ready' || !this.seg) return;
+    this.seg.meta = meta;
+    this.bytes = 0; this.warnedSize = false; this.discard = false; this.stopReason = null; this.segCount = 1;
     this.activeMs = 0; this.resumedAt = performance.now();
-    this.mr.start(1000);
+    this.seg.mr.start(1000);
     this.state = 'recording';
     clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
     if (this.streaming) this.healthTimer = setTimeout(() => this.checkHealth(), 4200);
     this.sizeTimer = setInterval(() => this.checkSize(), 1000);
     if (this.onstate) this.onstate('recording');
   }
-  async start(opts) { await this.prepare(opts); this.begin(); } // no countdown
+  async start(opts, meta) { await this.prepare(opts); this.begin(meta); } // no countdown
+  /* close this file and go straight on into a new one */
+  split(meta = null) {
+    if (!this.active || !this.seg) return false;
+    const old = this.seg;
+    let seg;
+    try { seg = this.makeSeg(meta); seg.mr.start(1000); if (this.state === 'paused') seg.mr.pause(); } catch (e) { return false; }
+    old.split = true; old.elapsed = this.elapsed();
+    this.seg = seg; this.segCount++;
+    this.bytes = 0; this.warnedSize = false;
+    this.activeMs = 0; this.resumedAt = performance.now();
+    try { old.mr.stop(); } catch (e) { /* already stopped */ }
+    return true;
+  }
   cancel() {
     if (this.state !== 'ready') return;
-    this.mr = null; this.release(); this.state = 'idle';
+    this.seg = null; this.release(); this.state = 'idle';
     clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
     if (this.onstate) this.onstate('idle');
   }
   pause() {
     if (this.state !== 'recording') return;
-    this.mr.pause();
+    this.seg.mr.pause();
     this.activeMs += performance.now() - this.resumedAt;
     this.state = 'paused';
     if (this.onstate) this.onstate('paused');
   }
   resume() {
     if (this.state !== 'paused') return;
-    this.mr.resume();
+    this.seg.mr.resume();
     this.resumedAt = performance.now();
     this.state = 'recording';
     if (this.onstate) this.onstate('recording');
   }
   stop(reason = 'user') {
     if (this.state === 'ready') { this.cancel(); return; }
-    if (!this.active || !this.mr || this.mr.state === 'inactive') return;
+    if (!this.active || !this.seg || this.seg.mr.state === 'inactive') return;
     this.stopReason = this.stopReason || reason;
     clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
-    this.stoppedAt = this.elapsed();
-    this.mr.stop();
+    this.seg.elapsed = this.stoppedAt = this.elapsed();
+    this.seg.mr.stop();
   }
   elapsed() {
     if (this.state === 'recording') return (this.activeMs + performance.now() - this.resumedAt) / 1000;
     if (this.state === 'paused') return this.activeMs / 1000;
     return 0;
   }
-  onData(ev) {
-    if (!ev.data || !ev.data.size) return;
-    this.chunks.push(ev.data);
-    this.bytes += ev.data.size;
+  onData(ev, seg = this.seg) {
+    if (!ev.data || !ev.data.size || !seg) return;
+    seg.chunks.push(ev.data);
+    seg.bytes += ev.data.size;
+    if (seg === this.seg) this.bytes = seg.bytes;
   }
   /* bytes held so far: counted for WebM, estimated from the bitrate (an upper bound) for MP4 */
   size() { return this.streaming ? this.bytes : Math.round(this.elapsed() * this.bps / 8); }
@@ -2337,21 +2843,132 @@ class Recorder {
     if (this.bytes < 16 * 1024) { this.discard = true; this.stop('empty'); if (this.onwarn) this.onwarn('EMPTY'); }
   }
   release() { for (const f of this.cleanup.splice(0)) { try { f(); } catch (e) { /* ignore */ } } }
-  finish() {
+  onSegStop(seg) {
     const type = String(this.mime).split(';')[0] || 'video/webm';
-    let blob = this.discard ? null : new Blob(this.chunks, { type });
+    if (seg.split) { // one song finished while the recording goes on
+      let blob = new Blob(seg.chunks, { type }), reason = 'split';
+      seg.chunks = [];
+      if (seg.elapsed < 2) { blob = null; reason = 'short'; } // skipped past: not worth a file
+      else if (blob.size < 16 * 1024 && seg.elapsed >= 3) { blob = null; reason = 'empty'; if (this.onwarn) this.onwarn('EMPTY'); }
+      if (this.onsegment) this.onsegment(blob, type, seg.meta, reason);
+      return;
+    }
+    let blob = this.discard ? null : new Blob(seg.chunks, { type });
     let reason = this.stopReason || 'user';
     // an MP4 that comes back nearly empty after several seconds: same failure, found at the end
-    const empty = blob && blob.size < 16 * 1024 && (this.stoppedAt || 0) >= 3;
+    const empty = blob && blob.size < 16 * 1024 && (seg.elapsed || 0) >= 3;
     if (empty) { blob = null; reason = 'empty'; }
-    this.chunks = []; this.mr = null; this.discard = false; this.stopReason = null; this.stoppedAt = 0;
+    else if (blob && this.segCount > 1 && seg.elapsed < 2) { blob = null; reason = 'short'; } // stopped right after a song change
+    seg.chunks = []; this.seg = null; this.discard = false; this.stopReason = null; this.stoppedAt = 0;
     this.state = 'idle';
     clearTimeout(this.healthTimer); clearInterval(this.sizeTimer);
     this.release(); // stops the microphone / screen share so the browser's recording indicator goes away
-    if (this.onstate) this.onstate('idle', blob, type, reason);
+    if (this.onstate) this.onstate('idle', blob, type, reason, seg.meta);
     if (empty && this.onwarn) this.onwarn('EMPTY');
   }
 }
+
+/* ---------- karaoke microphone: your voice with echo and reverb ----------
+   mic (no browser voice processing) → volume → dry + echo + reverb → limiter → headphones (only if asked) and the recorder
+   The reverb's impulse response is generated here, so nothing has to be downloaded. */
+class KaraokeMic {
+  constructor() {
+    this.ctx = null; this.on = false; this.monitor = false;
+    this.vol = 1; this.echo = 0.3; this.reverb = 0.35;
+    this.level = 0; this.loud = 0;
+    this.onlevel = null; this.onfeedback = null; this.onchange = null;
+  }
+  async enable() {
+    if (this.on) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('UNSUPPORTED'), { code: 'UNSUPPORTED' });
+    // singing: echo cancellation, noise suppression and auto gain all make a voice sound worse and add delay
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 } });
+    let ctx;
+    try { ctx = new AudioContext({ latencyHint: 'interactive' }); } catch (e) { ctx = new AudioContext(); }
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) { /* resumes on the next click */ } }
+    const src = ctx.createMediaStreamSource(stream);
+    const input = ctx.createGain(); input.gain.value = this.vol;
+    const delay = ctx.createDelay(1); delay.delayTime.value = 0.14;
+    const fb = ctx.createGain(); fb.gain.value = 0.34;
+    const echoTone = ctx.createBiquadFilter(); echoTone.type = 'lowpass'; echoTone.frequency.value = 3800; // each repeat a little darker, like a KTV echo
+    const echoWet = ctx.createGain(); echoWet.gain.value = this.echo * 0.7;
+    const conv = ctx.createConvolver(); conv.buffer = KaraokeMic.impulse(ctx, 2.4, 3.4);
+    const revWet = ctx.createGain(); revWet.gain.value = this.reverb * 0.9;
+    const sum = ctx.createGain();
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.003; limiter.release.value = 0.15;
+    const monitorGain = ctx.createGain(); monitorGain.gain.value = 0; // silent until you say you have headphones on
+    const recDest = ctx.createMediaStreamDestination();
+    const analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    src.connect(input); input.connect(analyser);
+    input.connect(sum);
+    input.connect(delay); delay.connect(echoTone); echoTone.connect(fb); fb.connect(delay); echoTone.connect(echoWet); echoWet.connect(sum);
+    input.connect(conv); conv.connect(revWet); revWet.connect(sum);
+    sum.connect(limiter);
+    limiter.connect(monitorGain); monitorGain.connect(ctx.destination);
+    limiter.connect(recDest);
+    Object.assign(this, { ctx, stream, input, echoWet, revWet, monitorGain, recDest, analyser, on: true, monitor: false, loud: 0 });
+    stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => this.disable()));
+    const buf = new Float32Array(analyser.fftSize);
+    this.meterTimer = setInterval(() => this.meter(buf), 100);
+    if (this.onchange) this.onchange();
+  }
+  /* a decaying burst of noise is a convincing room */
+  static impulse(ctx, seconds, decay) {
+    const rate = ctx.sampleRate, n = Math.max(1, Math.floor(rate * seconds)), pre = Math.floor(rate * 0.018);
+    const buf = ctx.createBuffer(2, n, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let lp = 0;
+      for (let i = pre; i < n; i++) {
+        const k = (i - pre) / (n - pre);
+        lp += ((Math.random() * 2 - 1) - lp) * (0.55 - 0.4 * k); // the tail loses its highs as it fades
+        d[i] = lp * Math.pow(1 - k, decay);
+      }
+    }
+    return buf;
+  }
+  /* level for the meter, and a guard against feedback: with speakers the voice comes back into the mic and swells */
+  meter(buf) {
+    if (!this.on) return;
+    this.analyser.getFloatTimeDomainData(buf);
+    let sum = 0, peak = 0;
+    for (let i = 0; i < buf.length; i++) { const v = buf[i]; sum += v * v; const a = Math.abs(v); if (a > peak) peak = a; }
+    const rms = Math.sqrt(sum / buf.length);
+    this.level = rms;
+    if (this.monitor && rms > KaraokeMic.FEEDBACK_RMS) {
+      this.loud += 0.1;
+      if (this.loud >= 1) { this.setMonitor(false); if (this.onfeedback) this.onfeedback(); }
+    } else this.loud = Math.max(0, this.loud - 0.05);
+    if (this.onlevel) this.onlevel(rms, peak);
+  }
+  setMonitor(on) {
+    this.monitor = !!on && this.on; this.loud = 0;
+    if (this.monitorGain) this.monitorGain.gain.setTargetAtTime(this.monitor ? 1 : 0, this.ctx.currentTime, 0.02);
+    if (this.onchange) this.onchange();
+  }
+  set(name, v) {
+    v = clamp(+v || 0, 0, name === 'vol' ? 2 : 1);
+    this[name] = v;
+    if (!this.on) return;
+    const t = this.ctx.currentTime;
+    if (name === 'vol') this.input.gain.setTargetAtTime(v, t, 0.02);
+    if (name === 'echo') this.echoWet.gain.setTargetAtTime(v * 0.7, t, 0.03);
+    if (name === 'reverb') this.revWet.gain.setTargetAtTime(v * 0.9, t, 0.03);
+  }
+  /* the processed voice, for the recorder */
+  get track() { return this.on ? this.recDest.stream.getAudioTracks()[0] : null; }
+  disable() {
+    if (!this.on) return;
+    clearInterval(this.meterTimer);
+    try { this.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* ignore */ }
+    try { this.ctx.close(); } catch (e) { /* ignore */ }
+    this.on = false; this.monitor = false; this.level = 0; this.ctx = null;
+    if (this.onlevel) this.onlevel(0, 0);
+    if (this.onchange) this.onchange();
+  }
+}
+KaraokeMic.FEEDBACK_RMS = 0.45; // about −7 dBFS held for a second: louder than singing into a mic, typical of a howl
 
 /* ---------- app: wires sources → clock → lyrics → renderer, plus all the UI ---------- */
 const LIVE_URL = 'https://yappyap0427-png.github.io/lyrics-studio/';
@@ -2371,7 +2988,9 @@ const App = {
       source: 'demo', theme: 'flow', layout: 'fit', offset: 0,
       karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true,
       recAudio: 'none', recFps: 60, recQuality: 'high', recAutoStop: true, recCountdown: true, recFormat: 'auto',
+      recRange: 'all', clipTall: false, safeArea: true, kVol: 1, kEcho: 0.3, kRev: 0.35, ytShuffle: false, ytLoop: false,
     }, Store.get('settings', {}));
+    if (!this.S.recOnChange) this.S.recOnChange = this.S.recAutoStop === false ? 'keep' : 'stop'; // older setting: a yes/no checkbox
     if (!LAYOUTS.includes(this.S.layout)) this.S.layout = 'fit';
     if (!THEMES[this.S.theme]) this.S.theme = 'flow';
     this.canvas = $('#stage');
@@ -2383,9 +3002,17 @@ const App = {
     this.r.setTheme(this.S.theme);
     this.r.setOpts(this.viewOpts());
     this.rec = new Recorder(this.canvas);
-    this.rec.onstate = (st, blob, type, reason) => this.onRecState(st, blob, type, reason);
+    this.rec.onstate = (st, blob, type, reason, meta) => this.onRecState(st, blob, type, reason, meta);
     this.rec.onwarn = code => this.onRecWarn(code);
+    this.rec.onsegment = (blob, type, meta, reason) => this.onRecSegment(blob, type, meta, reason);
+    this.mic = new KaraokeMic();
+    Object.assign(this.mic, { vol: this.S.kVol, echo: this.S.kEcho, reverb: this.S.kRev });
+    this.mic.onchange = () => this.syncKaraokeUI();
+    this.mic.onlevel = rms => { const el = $('#kLevel'); if (el) el.style.transform = `scaleX(${Math.min(1, rms * 5).toFixed(3)})`; };
+    this.mic.onfeedback = () => toast('偵測到回授聲（聲音從喇叭繞回麥克風），已關掉耳機監聽。戴上耳機後再打開。', 0);
+    this.recDir = null; this.clip = null; this.segNo = 0;
     this.sources = { spotify: new SpotifySource(this), youtube: new YouTubeSource(this), demo: new DemoSource(this) };
+    this.sources.youtube.shuffle = !!this.S.ytShuffle; this.sources.youtube.loop = !!this.S.ytLoop;
     this.bindUI();
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -2415,6 +3042,7 @@ const App = {
     this.last = now;
     const songT = this.track ? this.clock.now(now) : 0;
     this.r.draw(songT, songT - this.S.offset, dt, this.clock.playing);
+    if (this.clip) this.clipStep(songT);
     if (this.rec.active) {
       const s = fmtTime(this.rec.elapsed());
       if (this.recShown !== s) { this.recShown = s; $('#recTime').textContent = s; if (this.rec.streaming) $('#recBytes').textContent = (this.rec.bytes / 1048576).toFixed(1) + ' MB'; }
@@ -2448,7 +3076,15 @@ const App = {
   onPlayback(track, pos, playing, ts = performance.now()) {
     this.idleKey = null;
     if (!this.track || this.track.key !== track.key) {
-      if (this.rec.active && this.S.recAutoStop && this.track) { this.rec.stop('ended'); toast('換歌了，已停止錄影'); }
+      if (this.clip && this.clip.key !== track.key) {
+        if (this.rec.busy) this.rec.stop('clip');
+        this.clip = null;
+        toast('換歌了，片段錄影停在這裡', 5000);
+      } else if (this.rec.active && this.track) {
+        const mode = this.S.recOnChange;
+        if (mode === 'stop') { this.rec.stop('ended'); toast('換歌了，已停止錄影'); }
+        else if (mode === 'split' && !this.rec.split({ track })) { this.rec.stop('ended'); toast('沒辦法接著錄下一首，已停止並存檔', 6000); }
+      }
       this.track = track;
       this.clock.sync(pos, playing, ts, true);
       this.r.setTrack(track);
@@ -2456,7 +3092,7 @@ const App = {
       this.loadLyrics(track);
     } else {
       const pred = this.clock.now(ts);
-      if (this.rec.active && this.S.recAutoStop && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop('ended'); toast('歌曲播完，已停止錄影'); }
+      if (this.rec.active && !this.clip && this.S.recOnChange === 'stop' && pos + 2 < pred && pred > (track.duration || 0) - 4) { this.rec.stop('ended'); toast('歌曲播完，已停止錄影'); }
       this.clock.sync(pos, playing, ts);
       if (track.duration && !this.track.duration) this.track.duration = track.duration;
     }
@@ -2472,7 +3108,61 @@ const App = {
     this.r.setLyrics({ status: 'idle', note: info.title, hint: info.hint || '' });
     if (info.status) this.setStatus(info.status);
   },
+  /* the last song finished and nothing follows */
+  onEnded() {
+    if (this.rec.active && !this.clip && this.S.recOnChange !== 'keep') { this.rec.stop('ended'); toast('播完了，已停止錄影'); }
+  },
   setStatus(text) { if (text !== this.statusText) { this.statusText = text; $('#status').textContent = text; } },
+  nextTrack() { if (this.src && this.src.next) this.src.next(); },
+  prevTrack() { if (this.src && this.src.prev) this.src.prev(); },
+
+  /* ---------- playlist (YouTube) ---------- */
+  onQueueChange() { if ($('#dlgQueue').open) this.renderQueue(); },
+  openQueue() {
+    const y = this.sources.youtube;
+    if (this.S.source !== 'youtube' || !y.isList()) { toast('在 YouTube 視窗貼上歌單連結，或一行貼一個連結，就會有播放清單', 6000); return; }
+    this.renderQueue();
+    $('#dlgQueue').showModal();
+    const cur = $('#qList [aria-current]');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+    const info = y.queueInfo();
+    y.fetchTitles(info.ids.filter(id => !y.titleOf(id)).slice(0, 200), () => { if ($('#dlgQueue').open) this.renderQueue(); });
+  },
+  renderQueue() {
+    const y = this.sources.youtube, info = y.queueInfo(), ol = $('#qList');
+    $('#qCount').textContent = `${info.ids.length} 首`;
+    $('#qShuffle').setAttribute('aria-pressed', String(info.shuffle));
+    $('#qLoop').setAttribute('aria-pressed', String(info.loop));
+    $('#qNote').textContent = info.kind === 'list' ? '這是 YouTube 上的歌單。移除或加歌之後，會變成你自己的清單。' : '';
+    const had = ol.querySelector(':focus') ? ol.querySelector(':focus').closest('li') : null;
+    const focusId = had ? had.dataset.id + ':' + (had.querySelector('.qx:focus') ? 'x' : 'b') : null;
+    ol.replaceChildren(...info.ids.map((id, i) => {
+      const li = document.createElement('li');
+      li.dataset.id = id;
+      if (i === info.index) li.setAttribute('aria-current', 'true');
+      const t = y.titleOf(id);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'qitem';
+      const img = document.createElement('img');
+      img.alt = ''; img.loading = 'lazy'; img.width = 64; img.height = 36; img.src = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+      const num = document.createElement('span'); num.className = 'qn'; num.textContent = String(i + 1);
+      const meta = document.createElement('span'); meta.className = 'qm';
+      const tt = document.createElement('b'); tt.textContent = t ? t.title : `第 ${i + 1} 首`;
+      const ar = document.createElement('small'); ar.textContent = t ? t.artist : '還沒播到，播放後會顯示歌名';
+      meta.append(tt, ar);
+      b.append(num, img, meta);
+      b.setAttribute('aria-label', `${i + 1}. ${t ? t.title + '，' + t.artist : '第 ' + (i + 1) + ' 首'}${i === info.index ? '（正在播放）' : ''}`);
+      b.onclick = () => y.playAt(i);
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'qx'; x.textContent = '×';
+      x.setAttribute('aria-label', `從清單移除第 ${i + 1} 首`);
+      x.onclick = () => { y.removeAt(i); setTimeout(() => this.renderQueue(), 400); };
+      if (info.ids.length < 3) x.disabled = true;
+      li.append(b, x);
+      return li;
+    }));
+    if (focusId) { const [id, which] = focusId.split(':'); const li = ol.querySelector(`li[data-id="${id}"]`); if (li) (which === 'x' ? li.querySelector('.qx') : li.querySelector('.qitem')).focus(); }
+  },
   seekTo(t) { if (this.src && this.src.canSeek && this.src.seekTo) this.src.seekTo(t); },
 
   /* ---------- lyrics ---------- */
@@ -2562,7 +3252,8 @@ const App = {
     this.r.setLyrics({ status: 'idle', note: '等待播放' });
     this.clock.sync(0, false, performance.now(), true);
     $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.src === name)));
-    this.scrubShown = null;
+    this.scrubShown = null; this.queueShown = null;
+    if (this.clip) { if (this.rec.busy) this.rec.stop('clip'); this.clip = null; }
     this.src = this.sources[name];
     this.src.start();
     if (name === 'spotify' && !this.sources.spotify.token) this.openSpotify();
@@ -2596,7 +3287,13 @@ const App = {
       : prob ? 'Spotify 只接受 https 或 127.0.0.1 網址。請改用線上版，或用 start.bat 開啟。' : '';
     $('#dlgSpotify').showModal();
   },
-  openYoutube() { $('#ytUrl').value = Store.get('yt.last', ''); $('#dlgYoutube').showModal(); setTimeout(() => $('#ytUrl').select(), 30); },
+  openYoutube(add = false) {
+    const y = this.sources.youtube;
+    $('#ytAdd').hidden = !(this.S.source === 'youtube' && y.track);
+    $('#ytUrl').value = add ? '' : Store.get('yt.last', '');
+    $('#dlgYoutube').showModal();
+    setTimeout(() => $('#ytUrl').select(), 30);
+  },
   openSearch() {
     const t = this.track;
     $('#q').value = t ? [Lyrics.cleanTitle(t.title), String(t.artist || '').split(',')[0]].join(' ').trim() : '';
@@ -2677,48 +3374,120 @@ const App = {
   /* ---------- recording ---------- */
   openRec() {
     if (this.rec.active) { this.rec.stop(); return; }
-    if (this.rec.busy) { this.cancelCountdown(); return; }
+    if (this.rec.busy) { if (this.clip) this.rec.stop('clip'); else this.cancelCountdown(); return; }
     const f = $('#recForm');
     f.aud.value = this.S.recAudio;
     $('#recFps').value = String(this.S.recFps);
     $('#recQ').value = this.S.recQuality;
     $('#recFmt').value = this.S.recFormat;
-    $('#recAuto').checked = !!this.S.recAutoStop;
+    $('#recOnChange').value = this.S.recOnChange;
     $('#recCd').checked = !!this.S.recCountdown;
-    $('#recSize').textContent = `${this.canvas.width} × ${this.canvas.height}`;
-    this.updateRecHint();
+    $('#clipTall').checked = !!this.S.clipTall;
+    $('#recDirRow').hidden = !window.showDirectoryPicker;
+    $('#recDirName').textContent = this.recDir ? this.recDir.name : '下載資料夾';
+    const canClip = !!(this.track && this.r.lyr.status === 'synced' && this.r.lyr.entries.some(e => e.type === 'line'));
+    f.range.value = canClip && this.S.recRange === 'clip' ? 'clip' : 'all';
+    $('#recRange').querySelector('input[value=clip]').disabled = !canClip;
+    if (canClip) this.fillClipLines();
+    this.updateRecForm();
     $('#dlgRec').showModal();
   },
+  /* the two lists of lines for a clip, starting on the suggested chorus */
+  fillClipLines() {
+    const E = this.r.lyr.entries, off = this.S.offset;
+    const opts = [];
+    E.forEach((e, i) => { if (e.type === 'line') opts.push([i, `${fmtTime(Math.max(0, e.time + off))}  ${e.text}`]); });
+    const mk = sel => sel.replaceChildren(...opts.map(([i, label]) => { const o = document.createElement('option'); o.value = String(i); o.textContent = label; return o; }));
+    mk($('#clipFrom')); mk($('#clipTo'));
+    const sug = (this.track && this.clipPick && this.clipPick.key === this.track.key) ? this.clipPick : LRC.suggestClip(E, 30);
+    if (sug) { $('#clipFrom').value = String(sug.from); $('#clipTo').value = String(sug.to); }
+  },
+  clipRange() {
+    const E = this.r.lyr.entries, i = +$('#clipFrom').value, j = Math.max(i, +$('#clipTo').value), off = this.S.offset;
+    if (!E[i] || !E[j]) return null;
+    const from = Math.max(0, E[i].time + off - 1.0); // a second of lead-in so the first word is not clipped
+    const to = Math.min(E[j].end, E[j].fillEnd + 1.2) + off;
+    return { i, j, from, to };
+  },
+  updateRecForm() {
+    const f = $('#recForm'), clip = f.range.value === 'clip';
+    $('#clipBox').hidden = !clip;
+    $('#recFlow').hidden = clip; $('#recCdRow').hidden = clip;
+    if (clip) {
+      if (+$('#clipTo').value < +$('#clipFrom').value) $('#clipTo').value = $('#clipFrom').value;
+      const r = this.clipRange();
+      const src = this.src;
+      $('#clipInfo').textContent = !r ? '' : `長度 ${fmtTime(r.to - r.from)}，前面多留 1 秒。` +
+        (src && src.canSeek ? '按開始後會跳到這段前面，播到結尾自動停止。' : 'Spotify 不能從這裡跳轉，播到這段時會自動開始錄。');
+    }
+    this.updateRecHint();
+  },
   updateRecHint() {
-    const aud = $('#recForm').aud.value, src = this.S.source;
+    const f = $('#recForm'), aud = f.aud.value, src = this.S.source;
     const lines = [];
     if (aud === 'system' || aud === 'both') {
       if (src === 'spotify') lines.push('按開始後會跳出分享視窗：選「整個螢幕」，並打開「同時分享系統音訊」。');
       else if (src === 'demo') lines.push('示範曲本身沒有聲音，錄出來會是靜音。');
       else lines.push('按開始後會跳出分享視窗：選「這個分頁」，並打開「同時分享分頁音訊」。');
     }
-    if (aud === 'mic' || aud === 'both') lines.push('戴耳機錄，麥克風才不會收到喇叭的聲音。');
+    if (aud === 'mic' || aud === 'both') lines.push(this.mic.on ? '會錄到卡拉 OK 麥克風加了回音的人聲。' : '戴耳機錄，麥克風才不會收到喇叭的聲音。');
     if (aud === 'none') lines.push('只錄畫面，之後可以在剪輯軟體配上音樂。');
-    if (this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先把比例切到 9:16。');
+    if (f.range.value !== 'clip' && this.S.layout !== '9:16') lines.push('要發 TikTok 或 Reels，先把比例切到 9:16。');
+    if (f.range.value !== 'clip' && $('#recOnChange').value === 'split' && !this.recDir) lines.push('每首存一個檔時，瀏覽器可能會問要不要允許這個網站下載多個檔案，請按允許。');
     lines.push('切到其他分頁也會繼續錄，不過留在這個分頁畫面最順。');
     $('#recHint').textContent = lines.join(' ');
   },
   startRec(ev) {
     ev.preventDefault();
-    const f = $('#recForm');
+    const f = $('#recForm'), clip = f.range.value === 'clip';
     Object.assign(this.S, {
       recAudio: f.aud.value, recFps: parseInt($('#recFps').value, 10) || 60, recQuality: $('#recQ').value,
-      recFormat: $('#recFmt').value, recAutoStop: $('#recAuto').checked, recCountdown: $('#recCd').checked,
+      recFormat: $('#recFmt').value, recOnChange: $('#recOnChange').value, recCountdown: $('#recCd').checked,
+      recRange: clip ? 'clip' : 'all', clipTall: $('#clipTall').checked,
     });
+    this.S.recAutoStop = this.S.recOnChange !== 'keep';
     this.save();
     $('#dlgRec').close();
-    this.rec.prepare({
-      audio: this.S.recAudio, fps: this.S.recFps, bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
-      preferTab: this.S.source !== 'spotify', format: this.S.recFormat,
-    })
+    if (clip) { this.startClip(); return; }
+    this.segNo = 0;
+    this.rec.prepare(this.recOptions())
       .then(() => this.countdown(this.S.recCountdown ? 3 : 0))
-      .then(go => { if (go) this.rec.begin(); else { this.rec.cancel(); toast('已取消錄影'); } })
+      .then(go => { if (go) this.rec.begin({ track: this.track }); else { this.rec.cancel(); toast('已取消錄影'); } })
       .catch(err => this.recError(err));
+  },
+  recOptions() {
+    return {
+      audio: this.S.recAudio, fps: this.S.recFps, bitrate: this.S.recQuality === 'high' ? 16e6 : 8e6,
+      preferTab: this.S.source !== 'spotify', format: this.S.recFormat, micTrack: this.mic.on ? this.mic.track : null,
+    };
+  },
+  /* ---------- clip: record from one lyric line to another ---------- */
+  startClip() {
+    const r = this.clipRange(), t = this.track;
+    if (!r || !t) { toast('這首還沒有同步歌詞，不能選段落', 5000); return; }
+    this.clipPick = { key: t.key, from: r.i, to: r.j };
+    if (this.S.clipTall && this.S.layout !== '9:16') this.setLayout('9:16');
+    this.clip = { key: t.key, from: r.from, to: r.to, armed: true };
+    this.rec.prepare(this.recOptions())
+      .then(() => {
+        if (!this.clip) { this.rec.cancel(); return; }
+        document.body.classList.add('rec-wait');
+        $('#recbar').hidden = false; $('#recWait').hidden = false;
+        $('#recTime').textContent = '等待'; $('#recStop').textContent = '取消';
+        if (this.src && this.src.canSeek) { this.src.seekTo(Math.max(0, r.from - 1.5)); if (this.src.ensurePlaying) this.src.ensurePlaying(); }
+        this.startTicker(this.S.recFps || 30); // so a hidden tab still starts on time
+      })
+      .catch(err => { this.clip = null; this.recError(err); });
+  },
+  clipStep(songT) {
+    const c = this.clip, rec = this.rec;
+    if (rec.state === 'ready' && c.armed) {
+      if (songT >= c.from && songT < c.to) { c.armed = false; this.segNo = 0; rec.begin({ track: this.track, clip: true }); return; }
+      const msg = songT > c.to
+        ? `這段已經過了，把歌拉回 ${fmtTime(Math.max(0, c.from - 2))} 之前`
+        : `${fmtTime(c.from)} 開始錄（還有 ${Math.max(1, Math.ceil(c.from - songT))} 秒）`;
+      if (msg !== this.waitMsg) { this.waitMsg = msg; $('#recWait').textContent = msg; }
+    } else if (rec.active && songT >= c.to) rec.stop('clip');
   },
   recError(err) {
     const code = (err && (err.code || err.name)) || '';
@@ -2745,25 +3514,59 @@ const App = {
     });
   },
   cancelCountdown() { if (this.cdCancel) this.cdCancel(); },
-  onRecState(st, blob, type, reason) {
+  onRecState(st, blob, type, reason, meta) {
     const on = st === 'recording' || st === 'paused';
     document.body.classList.toggle('recording', on);
     document.body.classList.toggle('rec-paused', st === 'paused');
-    $('#recbar').hidden = !on;
+    document.body.classList.remove('rec-wait');
+    $('#recbar').hidden = !on; $('#recWait').hidden = true; this.waitMsg = '';
+    $('#recStop').textContent = '停止錄影';
     $('#btnRec .lbl').textContent = on ? '停止' : '錄影';
     $('#btnLayout').disabled = on;
     $('#recPause').textContent = st === 'paused' ? '繼續' : '暫停';
     $('#recBytes').hidden = !this.rec.streaming; // MP4 is only handed over at the end, so there is no running size to show
     this.recShown = '';
+    this.updateSafe();
     if (on) { this.startTicker(this.S.recFps || 30); return; }
+    const wasClip = !!(meta && meta.clip);
+    this.clip = null;
     this.stopTicker();
     this.resize();
     if (!blob) return;
     if (blob.size < 2000) { toast('錄到的檔案是空的', 0); return; }
+    const split = !wasClip && this.S.recOnChange === 'split' && this.segNo > 0;
+    const name = this.recName(meta, type, wasClip ? '片段' : '', split ? ++this.segNo : 0);
+    this.saveRecording(blob, name).then(where => {
+      const pre = reason === 'limit' ? '到了容量上限，已自動停止。' : wasClip ? '片段錄好了。' : '';
+      toast(pre + `已存成 ${where}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+    });
+  },
+  /* one song of a "one file per song" recording is done */
+  onRecSegment(blob, type, meta, reason) {
+    if (!blob) return; // too short to keep (a skipped song), or empty (already explained)
+    const n = ++this.segNo;
+    this.saveRecording(blob, this.recName(meta, type, '', n)).then(where => toast(`第 ${n} 首存好了：${where}`, 4500));
+  },
+  recName(meta, type, tag, n) {
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
-    const name = `${safeName(this.track ? this.track.title : 'lyrics')}-${stamp()}.${ext}`;
+    const t = (meta && meta.track) || this.track;
+    return `${n ? String(n).padStart(2, '0') + '-' : ''}${safeName(t ? t.title : 'lyrics')}${tag ? '-' + tag : ''}-${stamp()}.${ext}`;
+  },
+  /* into the folder picked in the record dialog (Chrome / Edge), otherwise a normal download */
+  async saveRecording(blob, name) {
+    if (this.recDir) {
+      try { const n = await writeToDir(this.recDir, name, blob); return `${this.recDir.name}/${n}`; }
+      catch (e) { this.recDir = null; toast('寫不進選的資料夾，改用下載', 5000); }
+    }
     downloadBlob(blob, name);
-    toast((reason === 'limit' ? '到了容量上限，已自動停止。' : '') + `已存成 ${name}（${(blob.size / 1048576).toFixed(1)} MB）`, 7000);
+    return name;
+  },
+  async pickRecDir() {
+    try {
+      this.recDir = await window.showDirectoryPicker({ id: 'lyrics-studio-rec', mode: 'readwrite', startIn: 'videos' });
+      $('#recDirName').textContent = this.recDir.name;
+      this.updateRecHint();
+    } catch (e) { if (e && e.name !== 'AbortError') toast('沒辦法使用這個資料夾：' + (e.message || e.name), 6000); }
   },
   onRecWarn(code) {
     if (code === 'EMPTY') {
@@ -2779,6 +3582,42 @@ const App = {
     }
   },
 
+  /* ---------- karaoke ---------- */
+  openKaraoke() { this.syncKaraokeUI(); $('#dlgKaraoke').showModal(); },
+  syncKaraokeUI() {
+    const m = this.mic;
+    $('#kOn').textContent = m.on ? '關閉麥克風' : '打開麥克風';
+    $('#kOn').className = m.on ? 'ghost' : 'primary';
+    $('#kMon').disabled = !m.on; $('#kMon').checked = m.monitor;
+    $('#kVol').value = String(this.S.kVol); $('#kEcho').value = String(this.S.kEcho); $('#kRev').value = String(this.S.kRev);
+    $('#kKtv').textContent = this.S.theme === 'ktv' ? '已是 KTV 畫面' : '換成 KTV 畫面';
+    $('#kKtv').disabled = this.S.theme === 'ktv';
+    const b = $('#btnKaraoke');
+    b.classList.toggle('on', m.on); b.setAttribute('aria-pressed', String(m.on));
+    b.dataset.tip = m.on ? (m.monitor ? '卡拉 OK：麥克風開著，耳機聽得到（K）' : '卡拉 OK：麥克風開著（K）') : '卡拉 OK（K）';
+  },
+  async toggleMic() {
+    if (this.mic.on) {
+      if (this.rec.busy && this.S.recAudio !== 'none' && this.S.recAudio !== 'system') { toast('正在錄你的聲音，停止錄影後才能關麥克風', 5000); return; }
+      this.mic.disable();
+      return;
+    }
+    try {
+      await this.mic.enable();
+      toast('麥克風開了。要聽到自己的聲音，先戴上耳機，再勾「從耳機聽自己的聲音」。', 6000);
+    } catch (e) {
+      const c = (e && (e.code || e.name)) || '';
+      toast(c === 'NotAllowedError' ? '沒有拿到麥克風權限。到網址列左邊的設定允許麥克風，再試一次。' : c === 'NotFoundError' ? '找不到麥克風，請確認已經接上' : '打不開麥克風：' + ((e && e.message) || c), 0);
+    }
+  },
+  /* where Reels / TikTok / Shorts put their own buttons and captions: shown on screen only, never recorded */
+  updateSafe() {
+    const on = this.S.safeArea && this.S.layout === '9:16' && !this.rec.active;
+    const el = $('#safe');
+    el.hidden = !on;
+    if (on) { el.style.width = this.canvas.style.width; el.style.height = this.canvas.style.height; }
+  },
+
   /* ---------- view controls ---------- */
   nudge(d) {
     this.S.offset = Math.round((this.S.offset + d) * 10) / 10;
@@ -2789,6 +3628,7 @@ const App = {
   setLayout(id) {
     if (this.rec.busy) { toast('錄影中不能換比例'); return false; }
     this.S.layout = id; this.save(); this.resize(); this.updateDock();
+    if (id === '9:16' && this.S.safeArea && !this.safeHinted) { this.safeHinted = true; toast('畫面上的斜線區域是短影音 App 會蓋住的地方，只是提示，不會錄進去。可以在設定關掉。', 6000); }
     return true;
   },
   cycleTheme() {
@@ -2879,6 +3719,7 @@ const App = {
     const s = Math.min(innerWidth / W, innerHeight / H); // same factor on both axes: never stretched
     c.style.width = Math.round(W * s) + 'px';
     c.style.height = Math.round(H * s) + 'px';
+    this.updateSafe();
   },
   applyPalette(p) {
     const st = document.documentElement.style;
@@ -2894,6 +3735,8 @@ const App = {
       $('#volWrap').hidden = !(src && src.hasVolume);
       if (src && src.hasVolume) $('#vol').value = String(Store.get('yt.vol', 100));
     }
+    const q = !!(show && src.hasQueue);
+    if (q !== this.queueShown) { this.queueShown = q; $('#btnPrev').hidden = $('#btnNext').hidden = $('#btnQueue').hidden = !q; }
     if (!show || this.scrubbing) return;
     const v = String(Math.round(clamp(songT / t.duration, 0, 1) * 1000));
     if (v !== this.scrubV) { this.scrubV = v; $('#seek').value = v; }
@@ -2917,7 +3760,29 @@ const App = {
     $('#btnLayout').onclick = ev => this.openMenu('layout', ev.currentTarget);
     $('#btnFull').onclick = () => this.toggleFull();
     $('#btnRec').onclick = () => this.openRec();
-    $('#recStop').onclick = () => this.rec.stop();
+    $('#recStop').onclick = () => { if (this.clip && this.rec.state === 'ready') toast('已取消片段錄影'); this.rec.stop(this.clip ? 'clip' : 'user'); };
+    $('#btnPrev').onclick = () => this.prevTrack();
+    $('#btnNext').onclick = () => this.nextTrack();
+    $('#btnQueue').onclick = () => this.openQueue();
+    $('#qShuffle').onclick = () => { const y = this.sources.youtube; y.setShuffle(!y.shuffle); this.S.ytShuffle = y.shuffle; this.save(); setTimeout(() => this.renderQueue(), 300); };
+    $('#qLoop').onclick = () => { const y = this.sources.youtube; y.setLoop(!y.loop); this.S.ytLoop = y.loop; this.save(); this.renderQueue(); };
+    $('#qAdd').onclick = () => { $('#dlgQueue').close(); this.openYoutube(true); };
+    $('#btnKaraoke').onclick = () => this.openKaraoke();
+    $('#kOn').onclick = async () => { await this.toggleMic(); this.syncKaraokeUI(); };
+    $('#kMon').addEventListener('change', ev => {
+      this.mic.setMonitor(ev.target.checked);
+      if (ev.target.checked) toast('請確定戴著耳機。用喇叭的話，聲音會繞回麥克風發出刺耳的回授聲。', 6000);
+    });
+    const bindMic = (id, key, name) => $(id).addEventListener('input', ev => { this.S[key] = +ev.target.value; this.mic.set(name, this.S[key]); this.save(); });
+    bindMic('#kVol', 'kVol', 'vol'); bindMic('#kEcho', 'kEcho', 'echo'); bindMic('#kRev', 'kRev', 'reverb');
+    $('#kKtv').onclick = () => { this.S.theme = 'ktv'; this.r.setTheme('ktv'); this.save(); this.updateDock(); this.syncKaraokeUI(); toast('已換成 KTV 畫面，按 T 可以換回其他風格'); };
+    $('#kRec').onclick = async () => {
+      if (!this.mic.on) { await this.toggleMic(); if (!this.mic.on) return; }
+      $('#dlgKaraoke').close();
+      this.S.recAudio = this.S.source === 'demo' ? 'mic' : 'both';
+      this.save();
+      this.openRec();
+    };
     $('#recPause').onclick = () => (this.rec.state === 'paused' ? this.rec.resume() : this.rec.pause());
     $('#cdCancel').onclick = () => this.cancelCountdown();
     $('#btnSettings').onclick = () => this.openSettings();
@@ -2935,14 +3800,16 @@ const App = {
       this.sources.spotify.login(id);
     };
     $('#spLogout').onclick = () => { this.sources.spotify.logout(); $('#dlgSpotify').close(); toast('已中斷 Spotify 連線'); };
-    $('#ytForm').addEventListener('submit', ev => {
-      ev.preventDefault();
+    const playYt = append => {
       const v = $('#ytUrl').value.trim();
-      if (!YouTubeSource.parseId(v)) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲網址', 5000); return; }
+      if (!YouTubeSource.parseInput(v)) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲或歌單網址', 5000); return; }
       $('#dlgYoutube').close();
       if (this.S.source !== 'youtube') this.setSource('youtube');
-      this.sources.youtube.play(v);
-    });
+      this.sources.youtube.play(v, { append });
+    };
+    $('#ytForm').addEventListener('submit', ev => { ev.preventDefault(); playYt(false); });
+    $('#ytAdd').onclick = () => playYt(true);
+    $('#ytUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $('#ytForm').requestSubmit(); } });
     $('#searchForm').addEventListener('submit', ev => { ev.preventDefault(); this.doSearch(); });
     $('#searchClose').onclick = () => $('#dlgSearch').close();
     $('#btnImport').onclick = () => $('#lrcFile').click();
@@ -2956,7 +3823,8 @@ const App = {
       ev.target.value = '';
     });
     $('#recForm').addEventListener('submit', ev => this.startRec(ev));
-    $('#recForm').addEventListener('change', () => this.updateRecHint());
+    $('#recForm').addEventListener('change', () => this.updateRecForm());
+    $('#recDirPick').onclick = () => this.pickRecDir();
     $('#recCancel').onclick = () => $('#dlgRec').close();
     $$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
@@ -2966,6 +3834,7 @@ const App = {
       if (key === 'blur' && this.S.blur) this.r.perfLow = false;
     });
     bindCheck('#setKaraoke', 'karaoke'); bindCheck('#setBlur', 'blur'); bindCheck('#setInfo', 'showInfo'); bindCheck('#setCredit', 'credit');
+    $('#setSafe').addEventListener('change', ev => { this.S.safeArea = ev.target.checked; this.save(); this.updateSafe(); });
     $('#setAlign').addEventListener('change', ev => { this.S.align = ev.target.value; this.save(); this.r.setOpts({ align: this.S.align }); });
     $('#setScale').addEventListener('input', ev => { this.S.scale = parseFloat(ev.target.value) || 1; this.save(); this.r.setOpts({ scale: this.S.scale }); $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%'; });
     $('#setOffReset').onclick = () => { this.S.offset = 0; this.save(); this.updateDock(); toast('偏移已歸零'); };
@@ -3030,6 +3899,7 @@ const App = {
     $('#setBlur').checked = !!this.S.blur;
     $('#setInfo').checked = !!this.S.showInfo;
     $('#setCredit').checked = !!this.S.credit;
+    $('#setSafe').checked = !!this.S.safeArea;
     $('#setAlign').value = this.S.align;
     $('#setScale').value = String(this.S.scale);
     $('#scaleVal').textContent = Math.round(this.S.scale * 100) + '%';
@@ -3051,7 +3921,10 @@ const App = {
       v: () => this.cycleLayout(),
       f: () => this.toggleFull(),
       r: () => this.openRec(),
-      p: () => { if (this.rec.state === 'paused') this.rec.resume(); else this.rec.pause(); },
+      p: () => { if (ev.shiftKey) this.prevTrack(); else if (this.rec.state === 'paused') this.rec.resume(); else this.rec.pause(); },
+      n: () => this.nextTrack(),
+      q: () => this.openQueue(),
+      k: () => this.openKaraoke(),
       h: () => document.body.classList.toggle('hideui'),
       ArrowLeft: () => { if (this.src && this.src.seek) this.src.seek(-5); },
       ArrowRight: () => { if (this.src && this.src.seek) this.src.seek(5); },

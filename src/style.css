@@ -190,6 +190,65 @@ body.dragging .drop { opacity: 1; }
   #ytplayer, .ytcard iframe { width: 200px; height: 200px; }
   .grid2, .grid3 { grid-template-columns: 1fr; }
 }
+/* ---------- playlist controls in the seek bar ---------- */
+.scrub .ib.sm { height: 32px; min-width: 32px; padding: 0 5px; }
+.scrub .ib.sm svg { width: 18px; height: 18px; }
+.scrub #btnPrev + #btnNext { margin-left: -10px; }
+.scrub #btnQueue { margin-left: -4px; }
+.ib.on { color: rgb(var(--accent)); background: rgb(var(--accent) / .16); }
+.ib.on:hover { background: rgb(var(--accent) / .24); }
+
+/* ---------- YouTube link box ---------- */
+.field textarea { appearance: none; width: 100%; min-height: 48px; max-height: 40vh; padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(255 255 255 / .14); background: rgb(0 0 0 / .28); color: #fff; font: 500 15px/1.45 var(--ui); resize: vertical; }
+.field textarea:focus { outline: none; border-color: rgb(var(--accent)); }
+
+/* ---------- playlist ---------- */
+.qhead { display: flex; align-items: center; gap: 12px; }
+.qhead h2 { margin: 0; }
+.queue { list-style: none; margin: 14px -8px 0; padding: 0; max-height: min(52vh, 460px); overflow: auto; display: grid; gap: 2px; }
+.queue li { display: flex; align-items: center; gap: 2px; border-radius: 12px; }
+.queue li[aria-current] { background: rgb(var(--accent) / .14); }
+.qitem { appearance: none; border: 0; background: transparent; color: #fff; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 12px; text-align: left; cursor: pointer; font: inherit; }
+.qitem:hover { background: rgb(255 255 255 / .06); }
+.qn { width: 2em; flex: none; text-align: right; color: rgb(255 255 255 / .5); font: 500 13px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.queue li[aria-current] .qn { color: rgb(var(--accent)); }
+.qitem img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; flex: none; background: rgb(255 255 255 / .06); }
+.qm { min-width: 0; display: grid; gap: 2px; }
+.qm b { font: 600 14px/1.3 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qm small { font-size: 12px; line-height: 1.3; color: rgb(255 255 255 / .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qx { appearance: none; border: 0; background: transparent; color: rgb(255 255 255 / .5); width: 36px; height: 36px; border-radius: 50%; font: 400 20px/1 var(--ui); cursor: pointer; flex: none; }
+.qx:hover { background: rgb(255 255 255 / .08); color: #fff; }
+.qx:disabled { visibility: hidden; }
+button.ghost[aria-pressed="true"] { background: rgb(var(--accent) / .22); color: rgb(var(--accent)); }
+
+/* ---------- record dialog: clip and saving ---------- */
+.choices.two { grid-template-columns: 1fr 1fr; }
+.choices.two legend { grid-column: 1 / -1; }
+.choices label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.clipbox { margin-top: 10px; padding: 2px 14px 14px; border-radius: 14px; background: rgb(255 255 255 / .045); }
+.dirpick { width: 100%; height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 12px; padding: 0 14px; }
+.dirpick span { overflow: hidden; text-overflow: ellipsis; }
+.dirpick small { color: rgb(255 255 255 / .6); font-weight: 500; font-size: 12px; }
+.recbar .wait { font-weight: 500; color: rgb(255 255 255 / .85); }
+body.rec-wait .recbar { border-color: rgb(255 176 32 / .45); background: rgb(30 20 4 / .66); }
+body.rec-wait .recbar .dot { animation: none; background: #ffb020; }
+body.rec-wait #recPause, body.rec-wait #recBytes { display: none; }
+
+/* ---------- karaoke ---------- */
+.microw { display: flex; align-items: center; gap: 14px; margin: 6px 0 2px; }
+.meter { flex: 1; height: 8px; border-radius: 999px; background: rgb(255 255 255 / .1); overflow: hidden; }
+.meter i { display: block; height: 100%; background: linear-gradient(90deg, rgb(var(--accent)), #ff6b6b); transform: scaleX(0); transform-origin: left; transition: transform .08s linear; }
+.check:has(input:disabled) { opacity: .5; cursor: default; }
+
+/* ---------- where short-video apps cover the picture (preview only) ---------- */
+.safe { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+.safe .sz { position: absolute; background: repeating-linear-gradient(135deg, rgb(255 255 255 / .07) 0 8px, transparent 8px 16px); outline: 1px dashed rgb(255 255 255 / .28); outline-offset: -1px; }
+.safe .top { left: 0; right: 0; top: 0; height: 12%; }
+.safe .right { right: 0; top: 42%; height: 34%; width: 14%; }
+.safe .bottom { left: 0; right: 0; bottom: 0; height: 24%; display: grid; place-items: center; }
+.safe .bottom span { font: 500 12px/1.4 var(--ui); color: rgb(255 255 255 / .72); background: rgb(0 0 0 / .45); padding: 5px 11px; border-radius: 999px; max-width: 86%; text-align: center; }
+body.idle .safe { opacity: .55; }
+
 /* small phones: after the 720px rules so these win */
 @media (max-width: 420px) {
   .ib { min-width: 30px; padding: 0 4px; }
@@ -198,4 +257,7 @@ body.dragging .drop { opacity: 1; }
 }
 @media (max-width: 370px) {
   .dock .sep { display: none; }
+}
+@media (max-width: 420px) {
+  #btnFull { display: none; } /* phones: the browser's own full screen is better, and the dock needs the room */
 }

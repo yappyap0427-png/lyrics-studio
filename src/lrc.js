@@ -125,6 +125,29 @@ const LRC = (() => {
     return out;
   }
 
+  /* a good stretch for a short clip: the longest run of lines that come back later (the chorus), at most maxLen seconds */
+  function suggestClip(E, maxLen = 30) {
+    const L = [];
+    E.forEach((e, i) => { if (e.type === 'line') L.push(i); });
+    if (!L.length) return null;
+    const key = s => String(s || '').toLowerCase().normalize('NFKC').replace(/[\s\p{P}\p{S}]/gu, '');
+    const n = new Map();
+    for (const i of L) { const k = key(E[i].text); if (k) n.set(k, (n.get(k) || 0) + 1); }
+    const rep = i => (n.get(key(E[i].text)) || 0) >= 2;
+    let best = null;
+    for (let a = 0; a < L.length; a++) {
+      if (!rep(L[a])) continue;
+      let b = a;
+      while (b + 1 < L.length && rep(L[b + 1]) && E[L[b + 1]].fillEnd - E[L[a]].time <= maxLen) b++;
+      if (b > a && (!best || b - a > best.len)) best = { from: L[a], to: L[b], len: b - a };
+    }
+    if (best) return { from: best.from, to: best.to };
+    const start = L[Math.min(L.length - 1, Math.floor(L.length / 4))]; // nothing repeats: ~20 s from a quarter of the way in
+    let to = start;
+    for (const i of L) if (i >= start && E[i].fillEnd - E[start].time <= 20) to = i;
+    return { from: start, to };
+  }
+
   function activeIndex(E, t) {
     let lo = 0, hi = E.length - 1, ans = -1;
     while (lo <= hi) {
@@ -147,6 +170,6 @@ const LRC = (() => {
     return plain ? { kind: 'plain', lines: plain } : { kind: 'empty', lines: 0 };
   }
 
-  return { parse, buildTimeline, activeIndex, estimate, inspect };
+  return { parse, buildTimeline, activeIndex, estimate, inspect, suggestClip };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = LRC;

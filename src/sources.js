@@ -245,24 +245,56 @@ function parseVideoTitle(title, author) {
   return { title: t, artist: a, inst };
 }
 
+/* ---------- YouTube: single songs, YouTube / YouTube Music playlists, or your own list of links ---------- */
+const YT_PRIVATE_LISTS = /^(LL|LM|WL)$/; // liked videos, liked music, watch later: only visible to their owner
+
 class YouTubeSource {
   constructor(app) {
     this.app = app; this.player = null; this.ready = false; this.videoId = null; this.track = null;
     this.active = false; this.timer = 0; this.lastT = -1; this.lastPlaying = null; this.n = 0;
     this.canSeek = true; this.hasVolume = true;
+    this.pending = null; this.kind = 'video'; this.errors = 0; this.jumpTo = null;
+    this.shuffle = false; this.loop = false; this.titles = Store.get('ytTitles', {});
   }
-  static parseId(input) {
+  /* one link → { id, list, index }; index is 0-based */
+  static parseLink(input) {
     const s = String(input || '').trim();
-    if (/^[\w-]{11}$/.test(s)) return s;
+    if (/^[\w-]{11}$/.test(s)) return { id: s, list: null, index: null };
     try {
       const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
-      if (/(^|\.)youtu\.be$/i.test(u.hostname)) return u.pathname.slice(1, 12) || null;
+      if (!/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/i.test(u.hostname)) return null;
+      let id = null;
+      if (/(^|\.)youtu\.be$/i.test(u.hostname)) id = u.pathname.slice(1, 12) || null;
       const v = u.searchParams.get('v');
-      if (v && /^[\w-]{11}/.test(v)) return v.slice(0, 11);
-      const m = u.pathname.match(/\/(?:embed|shorts|live|v)\/([\w-]{11})/);
-      if (m) return m[1];
-    } catch (e) { /* not a URL */ }
-    return null;
+      if (!id && v && /^[\w-]{11}/.test(v)) id = v.slice(0, 11);
+      const m = !id && u.pathname.match(/\/(?:embed|shorts|live|v)\/([\w-]{11})/);
+      if (m) id = m[1];
+      if (id && !/^[\w-]{11}$/.test(id)) id = null;
+      const list = (u.searchParams.get('list') || '').trim() || null;
+      const ix = parseInt(u.searchParams.get('index'), 10);
+      if (!id && !list) return null;
+      return { id, list, index: ix > 0 ? ix - 1 : null };
+    } catch (e) { return null; }
+  }
+  static parseId(input) { const r = YouTubeSource.parseLink(input); return r ? r.id : null; }
+  /* what the user pasted: one song, one playlist, or several links (one per line) */
+  static parseInput(text) {
+    const tokens = String(text || '').split(/[\s,，]+/).filter(Boolean);
+    const links = tokens.map(t => YouTubeSource.parseLink(t)).filter(Boolean);
+    if (!links.length) return null;
+    if (links.length === 1) {
+      const l = links[0];
+      if (l.list && YT_PRIVATE_LISTS.test(l.list)) return l.id ? { kind: 'video', id: l.id, privateList: true } : { kind: 'private' };
+      // RD… is YouTube's endless auto-generated mix (every YouTube Music share link has one): just play the song
+      if (l.list && /^RD/.test(l.list) && l.id) return { kind: 'video', id: l.id };
+      if (l.list) return { kind: 'list', list: l.list, id: l.id, index: l.index };
+      return { kind: 'video', id: l.id };
+    }
+    const ids = links.map(l => l.id).filter(Boolean);
+    const skipped = links.length - ids.length;
+    if (!ids.length) return { kind: 'list', list: links[0].list, id: null, index: null, skipped: links.length - 1 };
+    if (ids.length === 1) return { kind: 'video', id: ids[0], skipped };
+    return { kind: 'queue', ids: ids.slice(0, 200), skipped: skipped + Math.max(0, ids.length - 200) };
   }
   loadApi() {
     if (window.YT && window.YT.Player) return Promise.resolve();
@@ -278,45 +310,161 @@ class YouTubeSource {
     });
     return this.apiP;
   }
-  async play(input) {
+  /* play what was pasted; append = add the songs to the current list instead */
+  async play(input, { append = false } = {}) {
     if (!Env.can('youtube')) { toast('直接打開 HTML 檔時，YouTube 播放器不能用。請改用線上版，或用 start.bat 開啟。', 0); return false; }
-    const id = YouTubeSource.parseId(input);
-    if (!id) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲網址', 5000); return false; }
-    this.videoId = id;
-    Store.set('yt.last', String(input).trim());
-    this.track = null;
+    const req = YouTubeSource.parseInput(input);
+    if (!req) { toast('看不懂這個連結，請貼 YouTube 或 YouTube Music 的歌曲或歌單網址', 5000); return false; }
+    if (req.kind === 'private') { toast('「喜歡的音樂」和「稍後觀看」是私人清單，這裡讀不到。請建立一個公開或不公開的歌單再貼上。', 0); return false; }
+    if (req.privateList) toast('那個清單是私人的，這裡讀不到，先播這一首。', 6000);
+    if (req.skipped) toast(`有 ${req.skipped} 個連結不是單一影片，已略過（自己的清單只能放影片連結）`, 6000);
+    let action = req, last = String(input).trim();
+    if (append && this.ready && this.player && this.track) {
+      if (req.kind === 'list') { toast('整個歌單不能加進清單，請貼影片連結', 5000); return false; }
+      const list = this.isList();
+      const ids = (list ? this.playlist() : [this.track.vid]).concat(req.kind === 'queue' ? req.ids : [req.id]).slice(0, 200);
+      action = { kind: 'queue', ids, index: list ? this.player.getPlaylistIndex() : 0, start: this.player.getCurrentTime() || 0, keep: true };
+      last = ids.map(id => 'https://youtu.be/' + id).join('\n');
+      toast(`已加入清單，現在共 ${ids.length} 首`, 4000);
+    }
+    Store.set('yt.last', last);
+    this.videoId = action.id || (action.ids && action.ids[0]) || this.videoId || 'list';
+    if (!action.keep) this.track = null;
+    this.kind = action.kind === 'video' ? 'video' : action.kind;
+    this.errors = 0;
     try { await this.loadApi(); } catch (e) { toast('載入不了 YouTube 播放器，檢查網路後再試', 0); return false; }
     this.app.showYtCard(true);
-    if (this.player && this.ready) this.player.loadVideoById(id);
+    this.pending = action;
+    if (this.player && this.ready) this.apply();
     else if (!this.player) {
       this.player = new YT.Player('ytplayer', {
-        width: 356, height: 200, videoId: id,
+        width: 356, height: 200,
         playerVars: { autoplay: 1, playsinline: 1, rel: 0, origin: location.origin },
         events: {
           onReady: () => {
             this.ready = true;
             this.setVolume(Store.get('yt.vol', 100));
-            try { this.player.playVideo(); } catch (e) { /* ignore */ }
+            this.apply();
           },
+          onStateChange: e => this.onState(e),
           onError: e => this.onErr(e),
         },
       });
     }
     return true;
   }
+  apply() {
+    const a = this.pending, p = this.player;
+    if (!a || !p) return;
+    this.pending = null;
+    try {
+      if (a.kind === 'video') p.loadVideoById(a.id);
+      else if (a.kind === 'queue') p.loadPlaylist(a.ids, a.index || 0, a.start || 0);
+      else if (a.kind === 'list') {
+        p.loadPlaylist({ list: a.list, listType: 'playlist', index: a.index || 0 });
+        this.jumpTo = a.index == null && a.id ? a.id : null; // the link named a song inside the list: start there
+        clearTimeout(this.listCheck);
+        this.listCheck = setTimeout(() => { // a list the player cannot open: fall back to the song in the link
+          if (this.isList() || (this.track && this.track.vid)) return;
+          if (a.id) { this.kind = 'video'; p.loadVideoById(a.id); toast('這個歌單在這裡打不開，先播連結裡的這首', 6000); }
+          else toast('這個歌單在這裡打不開，可能是私人的或已刪除', 0);
+        }, 3500);
+      }
+      this.optsDue = a.kind !== 'video';
+    } catch (e) { toast('播放器還沒準備好，請再按一次播放', 5000); }
+  }
+  onState(e) {
+    const p = this.player, st = e && e.data;
+    this.n = 0; // something changed: read the video's title on the next tick instead of within a second
+    if (st === 1) this.errors = 0;
+    if (!p) return;
+    try {
+      if (this.optsDue && this.isList()) { this.optsDue = false; p.setShuffle(this.shuffle); p.setLoop(this.loop); }
+      if (this.jumpTo) {
+        const list = this.playlist(), i = list.indexOf(this.jumpTo);
+        if (list.length) { this.jumpTo = null; if (i > 0 && i !== p.getPlaylistIndex()) p.playVideoAt(i); }
+      }
+      if (st === 0) {
+        const list = this.playlist(), i = p.getPlaylistIndex();
+        if (!list.length || (i >= list.length - 1 && !this.loop)) this.app.onEnded();
+      }
+    } catch (err) { /* player busy */ }
+    if (this.app.onQueueChange) this.app.onQueueChange();
+  }
   onErr(e) {
     const c = e && e.data;
+    if (this.isList() && (c === 100 || c === 101 || c === 150)) { // skip it and keep the list going
+      this.errors++;
+      if (this.errors <= 5) {
+        toast(`跳過一首不能在這裡播放的影片（第 ${this.player.getPlaylistIndex() + 1} 首）`, 5000);
+        setTimeout(() => { try { this.player.nextVideo(); } catch (err) { /* ignore */ } }, 700);
+      } else toast('連續好幾首都不能在這裡播放，清單先停在這裡。', 0);
+      return;
+    }
     if (c === 2) toast('這個影片網址不正確', 6000);
     else if (c === 5) toast('播放器出錯，換一首試試', 6000);
-    else if (c === 100) toast('找不到這個影片，可能被刪除或設成私人', 0);
+    else if (c === 100) toast('找不到這個影片或歌單，可能被刪除或設成私人', 0);
     else if (c === 101 || c === 150) toast('版權方不允許在其他網站播放這支影片。換一個版本試試，例如 YouTube Music 的歌曲連結。', 0);
     else if (c === 153) toast('播放器拿不到網址來源。請改用線上版，或用 start.bat 開啟程式。', 0);
     else toast('播放失敗（錯誤 ' + c + '）', 0);
   }
+  /* ---- playlist ---- */
+  playlist() { try { return (this.player && this.ready && this.player.getPlaylist && this.player.getPlaylist()) || []; } catch (e) { return []; } }
+  isList() { return this.playlist().length > 1; }
+  get hasQueue() { return this.active && this.isList(); }
+  queueInfo() {
+    const ids = this.playlist();
+    let index = -1;
+    try { index = this.player.getPlaylistIndex(); } catch (e) { /* ignore */ }
+    return { ids, index, shuffle: this.shuffle, loop: this.loop, kind: this.kind };
+  }
+  next() { try { if (this.isList()) this.player.nextVideo(); } catch (e) { /* ignore */ } }
+  prev() {
+    try {
+      if ((this.player.getCurrentTime() || 0) > 3 || !this.isList()) this.seekTo(0); // like a CD player: first back to the start
+      else this.player.previousVideo();
+    } catch (e) { /* ignore */ }
+  }
+  playAt(i) { try { this.player.playVideoAt(i); } catch (e) { /* ignore */ } }
+  setShuffle(on) { this.shuffle = !!on; try { this.player.setShuffle(this.shuffle); } catch (e) { /* ignore */ } }
+  setLoop(on) { this.loop = !!on; try { this.player.setLoop(this.loop); } catch (e) { /* ignore */ } }
+  removeAt(i) {
+    const ids = this.playlist(), cur = this.player.getPlaylistIndex();
+    if (i < 0 || i >= ids.length || ids.length < 2) return;
+    ids.splice(i, 1);
+    const playing = i === cur;
+    const index = playing ? Math.min(i, ids.length - 1) : cur - (i < cur ? 1 : 0);
+    this.kind = 'queue';
+    this.pending = { kind: 'queue', ids, index, start: playing ? 0 : this.player.getCurrentTime() || 0 };
+    Store.set('yt.last', ids.map(id => 'https://youtu.be/' + id).join('\n'));
+    this.apply();
+  }
+  /* titles for the list: the ones already played, plus YouTube's public oEmbed lookup when the browser allows it */
+  titleOf(id) { return this.titles[id] || null; }
+  rememberTitle(id, t) {
+    this.titles[id] = t;
+    const keys = Object.keys(this.titles);
+    if (keys.length > 400) for (const k of keys.slice(0, keys.length - 400)) delete this.titles[k];
+    Store.set('ytTitles', this.titles);
+  }
+  async fetchTitles(ids, onEach) {
+    if (this.oembedOff) return;
+    for (const id of ids) {
+      if (this.titles[id] || !this.active) continue;
+      try {
+        const r = await fetchT('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id), {}, 6000);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const m = parseVideoTitle(j.title, j.author_name);
+        this.rememberTitle(id, { title: m.title || j.title, artist: m.artist || j.author_name || '' });
+        if (onEach) onEach(id);
+      } catch (e) { if (e instanceof TypeError) { this.oembedOff = true; return; } }
+    }
+  }
   start() {
     this.active = true;
     if (this.player) this.app.showYtCard(true);
-    if (!this.videoId) this.app.onIdle({ key: 'youtube-empty', title: '貼上一首歌的連結', hint: '點上方的 YouTube 開始', status: 'YouTube 待命' });
+    if (!this.videoId) this.app.onIdle({ key: 'youtube-empty', title: '貼上一首歌或一個歌單的連結', hint: '點上方的 YouTube 開始', status: 'YouTube 待命' });
     this.tick();
   }
   stop() {
@@ -326,7 +474,7 @@ class YouTubeSource {
     this.app.showYtCard(false);
   }
   /* the player's getters read state it already received, so polling them is cheap;
-     title and length only change with the video, so read those once a second */
+     title and length only change with the video, so read those once a second (or right after a state change) */
   tick() {
     if (!this.active) return;
     const p = this.player;
@@ -347,7 +495,9 @@ class YouTubeSource {
               art: ['https://i.ytimg.com/vi/' + d.video_id + '/maxresdefault.jpg', 'https://i.ytimg.com/vi/' + d.video_id + '/hqdefault.jpg'],
               source: 'youtube',
             };
+            if (!this.titles[d.video_id] || this.titles[d.video_id].title !== this.track.title) this.rememberTitle(d.video_id, { title: this.track.title, artist: this.track.artist });
             this.lastT = -1;
+            if (this.app.onQueueChange) this.app.onQueueChange();
           }
         }
         if (this.track && (t !== this.lastT || playing !== this.lastPlaying)) {
@@ -362,6 +512,7 @@ class YouTubeSource {
     if (!this.player || !this.ready) return;
     if (this.player.getPlayerState() === 1) this.player.pauseVideo(); else this.player.playVideo();
   }
+  ensurePlaying() { try { if (this.player && this.ready && this.player.getPlayerState() !== 1) this.player.playVideo(); } catch (e) { /* ignore */ } }
   seekTo(t) {
     if (!this.player || !this.ready) return;
     const d = this.player.getDuration ? this.player.getDuration() : 0;
@@ -427,6 +578,7 @@ class DemoSource {
     this.timer = setTimeout(() => this.tick(), 250);
   }
   togglePlay() { this.playing = !this.playing; this.app.onPlayback(this.track, this.pos, this.playing, performance.now()); }
+  ensurePlaying() { if (!this.playing) this.togglePlay(); }
   seek(d) { this.jump(this.pos + d); }
   seekTo(t) { this.jump(t); }
   jump(t) { this.pos = clamp(t, 0, this.track.duration - 0.05); this.last = performance.now(); this.app.onPlayback(this.track, this.pos, this.playing, this.last); }
