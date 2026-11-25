@@ -103,7 +103,7 @@ window.YT = { Player: class {
   getPlayerState() { return this.st; }
   getCurrentTime() { return this.st === 1 ? this.base + (performance.now() - this.t0) / 1000 : this.base; }
   getDuration() { return 200; }
-  getVideoData() { return { video_id: this.vid, title: 'Test Artist - Test Song (Official Music Video)', author: 'TestArtistVEVO' }; }
+  getVideoData() { return { video_id: this.vid, title: window.__ytTitle || 'Test Artist - Test Song (Official Music Video)', author: window.__ytAuthor || 'TestArtistVEVO' }; }
   loadVideoById(id) { this.vid = id; this.base = 0; this.t0 = performance.now(); this.st = 1; }
   seekTo(s) { this.base = s; this.t0 = performance.now(); }
   setVolume(v) { this.vol = v; } getVolume() { return this.vol; } unMute() { this.muted = false; } isMuted() { return this.muted; }
@@ -708,6 +708,19 @@ try:
         page.click("#btnSettings")
         page.wait_for_timeout(300)
         page.screenshot(path=str(OUT / "H5-settings-dialog.png"))
+        ctx.close()
+
+        # ---------- H6. karaoke upload titled "Title - Artist (伴奏版)" ----------
+        ctx, page = new_page(init=FAKE_YT)
+        page.goto(BASE)
+        page.wait_for_timeout(600)
+        page.evaluate("window.__ytTitle = 'Test Song - Test Artist (伴奏版)'; window.__ytAuthor = 'Test Artist'; LyricsStudio.setSource('youtube')")
+        page.wait_for_timeout(300)
+        page.fill("#ytUrl", "https://youtu.be/kkkkkkkkkkk")
+        page.click("#ytForm button[type=submit]")
+        ok = wait_js(page, "LyricsStudio.r.lyr.status === 'synced'", 6000)
+        k = page.evaluate("({t: LyricsStudio.track.title, a: LyricsStudio.track.artist, inst: LyricsStudio.track.inst})")
+        check("karaoke video: original song's lyrics, names the right way round", ok and k == {"t": "Test Song", "a": "Test Artist", "inst": True}, (ok, k))
         ctx.close()
 
         # ---------- P. phone screen: YouTube card at the smallest allowed size, controls fit ----------

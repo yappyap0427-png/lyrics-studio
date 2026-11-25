@@ -145,6 +145,10 @@ const App = {
   applyRecord(rec, track) {
     if (rec && rec.none) { this.r.setLyrics({ status: 'off' }); return; }
     if (!rec) { this.r.setLyrics({ status: 'notfound' }); return; }
+    if (Lyrics.swapped(rec, track)) { // the video said "Title - Artist": show the names the right way round
+      track.title = rec.trackName || track.title; track.artist = rec.artistName || track.artist;
+      this.canvas.setAttribute('aria-label', '歌詞畫面：' + track.title + (track.artist ? '，' + track.artist : ''));
+    }
     if (rec.syncedLyrics) { this.applyLrc(rec.syncedLyrics, track); return; }
     if (rec.instrumental) { this.r.setLyrics({ status: 'instrumental' }); return; }
     if (rec.plainLyrics) { this.r.setLyrics({ status: 'plain', plain: rec.plainLyrics.replace(/\r/g, '').split('\n') }); return; }

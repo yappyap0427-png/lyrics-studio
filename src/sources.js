@@ -224,17 +224,25 @@ function pickImage(imgs) {
 /* ---------- YouTube / YouTube Music: song plays in an embedded player ---------- */
 function parseVideoTitle(title, author) {
   let t = String(title || '').trim();
-  let a = String(author || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').replace(/\s*(official|官方)(\s*(artist\s*)?(channel|頻道))?$/i, '').trim();
+  const channel = String(author || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').replace(/\s*(official|官方)(\s*(artist\s*)?(channel|頻道))?$/i, '').trim();
+  let a = channel;
+  const inst = KARAOKE_RE.test(t);
   const NOISE = /(official|music\s*video|lyric|lyrics|audio|visuali[sz]er|\bmv\b|m\/v|\bhd\b|\b4k\b|live|官方|完整版|歌詞|動態|高音質|中字|字幕)/i;
-  t = t.replace(/[(\[【（〔][^)\]】）〕]*[)\]】）〕]/g, m => (NOISE.test(m) ? '' : m)).replace(/\s{2,}/g, ' ').trim();
+  t = t.replace(/[(\[【（〔][^)\]】）〕]*[)\]】）〕]/g, m => (NOISE.test(m) || KARAOKE_RE.test(m) ? '' : m)).replace(/\s{2,}/g, ' ').trim();
+  t = stripKaraoke(t);
   let m = t.match(/^(.+?)\s+[-–—|]\s+(.+)$/);
-  if (m) { a = m[1].trim(); t = m[2].trim(); }
-  else {
+  if (m) {
+    a = stripKaraoke(m[1]); t = stripKaraoke(m[2]);
+    // usually "Artist - Title"; when the channel name matches the right-hand side it was "Title - Artist"
+    const tight = s => String(s || '').toLowerCase().normalize('NFKC').replace(/[\s\p{P}\p{S}]/gu, '');
+    const like = (x, y) => { x = tight(x); y = tight(y); return !!(x && y && (x === y || x.includes(y) || y.includes(x))); };
+    if (channel && like(channel, t) && !like(channel, a)) [a, t] = [t, a];
+  } else {
     m = t.match(/^(.+?)\s*[《『「【](.+?)[》』」】]/);
-    if (m) { a = m[1].trim(); t = m[2].trim(); }
+    if (m) { a = m[1].trim(); t = stripKaraoke(m[2]); }
   }
   t = t.replace(/\s+(official\s*)?(music\s*video|mv|m\/v)$/i, '').replace(/["“”]/g, '').trim();
-  return { title: t, artist: a };
+  return { title: t, artist: a, inst };
 }
 
 class YouTubeSource {
@@ -335,7 +343,7 @@ class YouTubeSource {
             this.track = {
               key: 'yt:' + d.video_id, vid: d.video_id,
               title: meta.title || d.title, artist: meta.artist || d.author || '', album: '',
-              duration: dur,
+              duration: dur, inst: meta.inst,
               art: ['https://i.ytimg.com/vi/' + d.video_id + '/maxresdefault.jpg', 'https://i.ytimg.com/vi/' + d.video_id + '/hqdefault.jpg'],
               source: 'youtube',
             };

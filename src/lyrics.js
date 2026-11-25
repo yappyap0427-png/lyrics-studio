@@ -1,3 +1,13 @@
+/* ---------- karaoke / instrumental uploads: the lyrics to show are the original song's ---------- */
+const KARAOKE_SRC = String.raw`karaoke|instrumental|\binst\b\.?|off[\s-]*vocal|backing\s*track|minus\s*one|伴奏|伴唱|純音樂|纯音乐|消音|去人聲|去人声|ktv|カラオケ|オフボーカル|メロディ入り|노래방|반주`;
+const KARAOKE_RE = new RegExp(KARAOKE_SRC, 'i');
+const KARAOKE_BRACKET = new RegExp(String.raw`\s*[(\[（【〔「『《][^)\]）】〕」』》]*(?:${KARAOKE_SRC})[^)\]）】〕」』》]*[)\]）】〕」』》]`, 'gi');
+// a karaoke word at the end, optionally followed by more of them or by 版 / version: "晴天 KTV伴奏版", "Song - Karaoke Version"
+const KARAOKE_TAIL = new RegExp(String.raw`\s*[-–—|/:：~]?\s*(?:${KARAOKE_SRC})(?:\s*[-–—|/:：~]?\s*(?:${KARAOKE_SRC}|版|ver\.?|version))*\s*$`, 'i');
+function stripKaraoke(s) {
+  return String(s || '').replace(KARAOKE_BRACKET, '').replace(KARAOKE_TAIL, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 /* ---------- LRCLIB client (free synced-lyrics database, CORS enabled) ---------- */
 const Lyrics = (() => {
   const API = 'https://lrclib.net/api';
@@ -66,7 +76,7 @@ const Lyrics = (() => {
   }
 
   function cleanTitle(s) {
-    return String(s || '')
+    return stripKaraoke(s)
       .replace(/\s*[-–—]\s*(\d{4}\s*)?(remaster(ed)?|re-?master(ed)?|live|mono|stereo|single|radio edit|edit|version|mix|demo)\b.*$/i, '')
       .replace(/\s*[(\[（【][^)\]）】]*(feat\.?|ft\.?|with |remaster|version|live|edit|mix|from |theme|ost|插曲|主題曲|片尾曲|片頭曲)[^)\]）】]*[)\]）】]/gi, '')
       .trim();
@@ -74,18 +84,24 @@ const Lyrics = (() => {
   const tight = s => String(s || '').toLowerCase().normalize('NFKC').replace(/[\s\p{P}\p{S}]/gu, '');
   const firstArtist = a => String(a || '').split(/,|&|、| x |feat\.|ft\./i)[0].trim();
 
-  function score(r, t) {
+  function names(r, title, artist) {
     let s = 0;
-    const a = tight(cleanTitle(t.title)), b = tight(cleanTitle(r.trackName || r.name));
+    const a = tight(cleanTitle(title)), b = tight(cleanTitle(r.trackName || r.name));
     if (a && b) { if (a === b) s += 4; else if (a.includes(b) || b.includes(a)) s += 2.2; }
-    const ta = tight(t.artist), ra = tight(r.artistName), fa = tight(firstArtist(t.artist));
+    const ta = tight(artist), ra = tight(r.artistName), fa = tight(firstArtist(artist));
     if (ta && ra && (ta === ra || ta.includes(ra) || ra.includes(ta) || (fa && (ra.includes(fa) || fa.includes(ra))))) s += 3;
+    return s;
+  }
+  // a video titled "Title - Artist" was read as "Artist - Title": the record then matches with the two swapped
+  const swapped = (r, t) => t.source === 'youtube' && names(r, t.artist, t.title) > names(r, t.title, t.artist);
+  function score(r, t) {
+    let s = Math.max(names(r, t.title, t.artist), t.source === 'youtube' ? names(r, t.artist, t.title) : 0);
     if (t.duration && r.duration) {
       const d = Math.abs(r.duration - t.duration);
       s += d <= 2 ? 3 : d <= 4 ? 2 : d <= 8 ? 0.5 : d <= 20 ? -1 : -4;
     }
     if (r.syncedLyrics) s += 2;
-    if (r.instrumental) s += 0.5;
+    if (r.instrumental && !isKaraoke(t)) s += 0.5;
     return s;
   }
   function best(list, t, min = 5) {
@@ -93,7 +109,7 @@ const Lyrics = (() => {
     for (const r of list) { const sc = score(r, t); if (sc > ts) { ts = sc; top = r; } }
     return top && ts >= min ? top : null;
   }
-  const usable = r => r && (r.syncedLyrics || r.instrumental);
+  const isKaraoke = t => !!(t.inst || KARAOKE_RE.test(t.title || ''));
 
   async function find(t, { force = false, signal } = {}) {
     const manual = Store.get('lyricsPick.' + t.key, null);
@@ -105,6 +121,8 @@ const Lyrics = (() => {
       catch (e) { if (e.message === 'RATE_LIMIT' || e.name === 'AbortError' || e.code === 'TIMEOUT') throw e; }
     }
     const artist0 = firstArtist(t.artist);
+    // for a karaoke or instrumental version, an "instrumental" record is not an answer: we want the original's words
+    const usable = r => r && (r.syncedLyrics || (r.instrumental && !isKaraoke(t)));
     const dur = t.duration ? Math.round(t.duration) : undefined;
     let rec = null, plain = null;
     const soft = async fn => {
@@ -133,5 +151,5 @@ const Lyrics = (() => {
     remember(t.key, result);
     return result;
   }
-  return Object.assign(api, { find, search, byId, cleanTitle, score, remember, clearCache: forget });
+  return Object.assign(api, { find, search, byId, cleanTitle, score, swapped, isKaraoke, remember, clearCache: forget });
 })();

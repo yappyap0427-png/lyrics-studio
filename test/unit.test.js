@@ -7,7 +7,7 @@ const vm = require('vm');
 const SRC = path.join(__dirname, '..', 'src');
 const FILES = ['util.js', 'lrc.js', 'palette.js', 'lyrics.js', 'sources.js', 'renderer.js', 'recorder.js'];
 const code = FILES.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n;\n') +
-  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER })';
+  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER, stripKaraoke })';
 
 function memStorage(map = new Map()) {
   return { getItem: k => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: k => map.delete(k), _map: map };
@@ -29,7 +29,7 @@ const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
 const { api } = load();
-const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER } = api;
+const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER, stripKaraoke } = api;
 
 test('tokenize splits CJK per character and keeps Latin words with their spaces', () => {
   assert.deepStrictEqual(Array.from(tokenize('你好 world, 再見')), ['你', '好', ' ', 'world, ', '再', '見']);
@@ -64,11 +64,40 @@ test('charTimes spreads a word across its characters', () => {
   assert.deepStrictEqual(Array.from(st), [0, 0.5, 1]); assert.deepStrictEqual(Array.from(en), [0.5, 1, 1.5]);
 });
 test('parseVideoTitle handles common YouTube title shapes', () => {
-  const p = (t, a) => JSON.parse(JSON.stringify(parseVideoTitle(t, a)));
+  const p = (t, a) => { const r = parseVideoTitle(t, a); return { title: r.title, artist: r.artist }; };
   assert.deepStrictEqual(p('Some Singer - Night Drive (Official Music Video)', 'SomeSingerVEVO'), { title: 'Night Drive', artist: 'Some Singer' });
   assert.deepStrictEqual(p('晴空', '某歌手 Singer - Topic'), { title: '晴空', artist: '某歌手 Singer' });
   assert.deepStrictEqual(p('某歌手 Singer【晴空 Clear Sky】Official MV', 'Label Music'), { title: '晴空 Clear Sky', artist: '某歌手 Singer' });
   assert.deepStrictEqual(p('Song Name', 'Some Artist'), { title: 'Song Name', artist: 'Some Artist' });
+});
+test('karaoke and instrumental uploads give the original song name', () => {
+  const p = (t, a) => JSON.parse(JSON.stringify(parseVideoTitle(t, a)));
+  assert.deepStrictEqual(p('某歌手 - 晴空 (Karaoke 伴奏版)', 'KTV Channel'), { title: '晴空', artist: '某歌手', inst: true });
+  assert.deepStrictEqual(p('某歌手 - 晴空 KTV伴奏版', 'KTV Channel'), { title: '晴空', artist: '某歌手', inst: true });
+  assert.deepStrictEqual(p('Some Singer - Night Drive (Instrumental)', 'Backing Tracks'), { title: 'Night Drive', artist: 'Some Singer', inst: true });
+  assert.deepStrictEqual(p('Some Singer - Night Drive [Off Vocal]', 'x'), { title: 'Night Drive', artist: 'Some Singer', inst: true });
+  assert.deepStrictEqual(p('歌手A「夜の歌」カラオケ', 'x'), { title: '夜の歌', artist: '歌手A', inst: true });
+  assert.deepStrictEqual(p('Some Singer - Night Drive - Karaoke Version', 'x'), { title: 'Night Drive', artist: 'Some Singer', inst: true });
+  assert.strictEqual(p('Some Singer - Night Drive (Official Video)', 'Some Singer').inst, false);
+  assert.strictEqual(stripKaraoke('初版'), '初版', 'a title that merely ends in 版 is kept');
+  assert.strictEqual(stripKaraoke('Instinct'), 'Instinct', 'inst only as a whole word');
+});
+test('"Title - Artist" is turned round when the channel is the artist', () => {
+  const p = (t, a) => JSON.parse(JSON.stringify(parseVideoTitle(t, a)));
+  assert.deepStrictEqual(p('晴空 - 某歌手', '某歌手 Official'), { title: '晴空', artist: '某歌手', inst: false });
+  assert.deepStrictEqual(p('某歌手 - 晴空', '某歌手'), { title: '晴空', artist: '某歌手', inst: false });
+});
+test('Lyrics matching: swapped names count for YouTube, instrumental records do not answer a karaoke video', () => {
+  const rec = { trackName: '晴空', artistName: '某歌手', duration: 200, syncedLyrics: 'x' };
+  const yt = { title: '某歌手', artist: '晴空', duration: 200, source: 'youtube' };
+  const sp = { title: '某歌手', artist: '晴空', duration: 200, source: 'spotify' };
+  assert.ok(Lyrics.score(rec, yt) >= 9, 'swapped YouTube names still match');
+  assert.ok(Lyrics.score(rec, sp) < 9, 'Spotify names are exact, no swapping');
+  assert.strictEqual(Lyrics.swapped(rec, yt), true);
+  assert.strictEqual(Lyrics.swapped(rec, { title: '晴空', artist: '某歌手', source: 'youtube' }), false);
+  assert.strictEqual(Lyrics.cleanTitle('Night Drive - Instrumental'), 'Night Drive');
+  assert.strictEqual(Lyrics.isKaraoke({ title: 'Night Drive (Karaoke Version)' }), true);
+  assert.strictEqual(Lyrics.isKaraoke({ title: 'Night Drive' }), false);
 });
 test('YouTubeSource.parseId reads every link style', () => {
   const id = 'abcdefghijk';
@@ -156,6 +185,22 @@ async function asyncTests() {
     second.Store.set('lyricsPick.sp:1', 'none');
     assert.deepStrictEqual(JSON.parse(JSON.stringify(await second.Lyrics.find(t))), { none: true });
     console.log('ok  Lyrics cache survives reload; "no lyrics" pin');
+  }
+  // a karaoke upload must not stop at LRCLIB's "instrumental" entry
+  {
+    const instRec = { id: 1, trackName: 'Night Drive', artistName: 'Some Singer', duration: 200, instrumental: true, syncedLyrics: null, plainLyrics: null };
+    const orig = { id: 2, trackName: 'Night Drive', artistName: 'Some Singer', duration: 200, instrumental: false, syncedLyrics: '[00:01.00]placeholder', plainLyrics: 'placeholder' };
+    const fetchImpl = async url => {
+      const u = new URL(url);
+      const body = u.pathname.endsWith('/get') ? instRec : u.pathname.endsWith('/search') ? [instRec, orig] : null;
+      return { status: body ? 200 : 404, ok: !!body, headers: { get: () => 'application/json' }, json: async () => body || {} };
+    };
+    const a = load({ fetchImpl }).api;
+    const r = await a.Lyrics.find({ key: 'yt:k1', title: 'Night Drive', artist: 'Some Singer', duration: 200, source: 'youtube', inst: true });
+    assert.strictEqual(r && r.id, 2, 'karaoke video gets the original lyrics');
+    const r2 = await a.Lyrics.find({ key: 'sp:k2', title: 'Night Drive', artist: 'Some Singer', duration: 200, source: 'spotify' });
+    assert.strictEqual(r2 && r2.id, 1, 'the instrumental itself is still reported as instrumental');
+    console.log('ok  karaoke video skips the instrumental record');
   }
   // Env: what each way of opening the page allows
   {
