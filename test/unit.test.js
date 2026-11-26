@@ -7,7 +7,7 @@ const vm = require('vm');
 const SRC = path.join(__dirname, '..', 'src');
 const FILES = ['util.js', 'lrc.js', 'palette.js', 'lyrics.js', 'sources.js', 'renderer.js', 'recorder.js'];
 const code = FILES.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n;\n') +
-  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER, stripKaraoke, ktvSchedule })';
+  '\n;({ tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, Env, fetchT, decodeText, Store, THEMES, THEME_ORDER, stripKaraoke })';
 
 function memStorage(map = new Map()) {
   return { getItem: k => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: k => map.delete(k), _map: map };
@@ -29,7 +29,7 @@ const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
 const { api } = load();
-const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER, stripKaraoke, ktvSchedule } = api;
+const { tokenize, mapRows, rowFill, charTimes, parseVideoTitle, YouTubeSource, Lyrics, Clock, LRC, Renderer, decodeText, THEMES, THEME_ORDER, stripKaraoke } = api;
 
 test('tokenize splits CJK per character and keeps Latin words with their spaces', () => {
   assert.deepStrictEqual(Array.from(tokenize('你好 world, 再見')), ['你', '好', ' ', 'world, ', '再', '見']);
@@ -118,24 +118,6 @@ test('YouTube input: one song, a playlist, an album, or several links', () => {
   assert.deepStrictEqual(P('https://www.youtube.com/watch?v=abcdefghijk&list=LL'), { kind: 'video', id: 'abcdefghijk', privateList: true });
   assert.strictEqual(YouTubeSource.parseInput('https://example.com/watch?v=abcdefghijk'), null);
   assert.strictEqual(YouTubeSource.parseInput('hello'), null);
-});
-test('KTV schedule: rows alternate, a verse starts on top, nothing overlaps, every line is up while sung', () => {
-  const lrc = ['[00:05.00]one', '[00:08.00]two', '[00:11.00]three', '[00:14.00]four', '[00:17.00]five', '[00:40.00]six', '[00:43.00]seven', '[00:46.00]eight'].join('\n');
-  const E = LRC.buildTimeline(LRC.parse(lrc), 60);
-  const plan = ktvSchedule(E);
-  assert.strictEqual(plan.length, 8);
-  assert.deepStrictEqual(Array.from(plan, o => o.row), [0, 1, 0, 1, 0, 0, 1, 0]);
-  assert.deepStrictEqual(Array.from(plan, o => o.brk), [true, false, false, false, false, true, false, false]);
-  assert.ok(plan[0].dots && plan[5].dots, 'count-in dots before each verse');
-  assert.strictEqual(plan[1].appear, plan[0].appear, 'the second line of a verse shows with the first');
-  for (const o of plan) {
-    const e = E[o.i];
-    assert.ok(o.appear <= e.time && o.hide >= e.fillEnd, `line ${e.text} on screen while sung`);
-  }
-  for (const r of [0, 1]) {
-    const rows = plan.filter(o => o.row === r);
-    for (let k = 1; k < rows.length; k++) assert.ok(rows[k].appear >= rows[k - 1].hide - 1e-9, `row ${r} lines do not overlap`);
-  }
 });
 test('clip suggestion: the repeated block (the chorus), else ~20 s from a quarter in', () => {
   const lines = ['verse a', 'verse b', 'hook one', 'hook two', 'verse c', 'verse d', 'hook one', 'hook two', 'outro'];

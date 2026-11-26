@@ -16,8 +16,9 @@ const App = {
       source: 'demo', theme: 'flow', layout: 'fit', offset: 0,
       karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true,
       recAudio: 'none', recFps: 60, recQuality: 'high', recAutoStop: true, recCountdown: true, recFormat: 'auto',
-      recRange: 'all', clipTall: false, safeArea: true, kVol: 1, kEcho: 0.3, kRev: 0.35, ytShuffle: false, ytLoop: false,
+      recRange: 'all', clipTall: false, safeArea: true, kVol: 1, kEcho: 0.3, kRev: 0.35, ytShuffle: false, ytLoop: false, voiceViz: true,
     }, Store.get('settings', {}));
+    if (this.S.theme === 'ktv') this.S.theme = 'stage'; // the old KTV style became 舞台
     if (!this.S.recOnChange) this.S.recOnChange = this.S.recAutoStop === false ? 'keep' : 'stop'; // older setting: a yes/no checkbox
     if (!LAYOUTS.includes(this.S.layout)) this.S.layout = 'fit';
     if (!THEMES[this.S.theme]) this.S.theme = 'flow';
@@ -35,8 +36,13 @@ const App = {
     this.rec.onsegment = (blob, type, meta, reason) => this.onRecSegment(blob, type, meta, reason);
     this.mic = new KaraokeMic();
     Object.assign(this.mic, { vol: this.S.kVol, echo: this.S.kEcho, reverb: this.S.kRev });
-    this.mic.onchange = () => this.syncKaraokeUI();
-    this.mic.onlevel = rms => { const el = $('#kLevel'); if (el) el.style.transform = `scaleX(${Math.min(1, rms * 5).toFixed(3)})`; };
+    this.mic.onchange = () => { this.r.voice.on = this.mic.on; this.syncKaraokeUI(); };
+    this.mic.onlevel = rms => {
+      const v = Math.min(1, rms * 5);
+      $('#kLevel').style.transform = `scaleX(${v.toFixed(3)})`;
+      $('#btnKaraoke').style.setProperty('--lvl', v.toFixed(3));
+      this.r.voiceLevel(rms);
+    };
     this.mic.onfeedback = () => toast('偵測到回授聲（聲音從喇叭繞回麥克風），已關掉耳機監聽。戴上耳機後再打開。', 0);
     this.recDir = null; this.clip = null; this.segNo = 0;
     this.sources = { spotify: new SpotifySource(this), youtube: new YouTubeSource(this), demo: new DemoSource(this) };
@@ -55,7 +61,7 @@ const App = {
     this.last = performance.now();
     requestAnimationFrame(() => this.frame());
   },
-  viewOpts() { const S = this.S; return { karaoke: S.karaoke, blur: S.blur, align: S.align, scale: S.scale, showInfo: S.showInfo, credit: S.credit }; },
+  viewOpts() { const S = this.S; return { karaoke: S.karaoke, blur: S.blur, align: S.align, scale: S.scale, showInfo: S.showInfo, credit: S.credit, voice: S.voiceViz }; },
   save() { Store.set('settings', this.S); },
 
   /* ---------- drawing loop ---------- */
@@ -611,17 +617,26 @@ const App = {
   },
 
   /* ---------- karaoke ---------- */
-  openKaraoke() { this.syncKaraokeUI(); $('#dlgKaraoke').showModal(); },
+  /* the karaoke panel floats above the dock and leaves the lyrics free, so it can stay open while singing */
+  openKaraoke(show = $('#kPanel').hidden) {
+    const p = $('#kPanel');
+    p.hidden = !show;
+    if (show) { this.syncKaraokeUI(); setTimeout(() => $('#kOn').focus({ preventScroll: true }), 30); }
+    else if (p.contains(document.activeElement)) $('#btnKaraoke').focus();
+  },
   syncKaraokeUI() {
     const m = this.mic;
-    $('#kOn').textContent = m.on ? '關閉麥克風' : '打開麥克風';
-    $('#kOn').className = m.on ? 'ghost' : 'primary';
+    const on = $('#kOn');
+    on.setAttribute('aria-pressed', String(m.on));
+    on.querySelector('span').textContent = m.on ? '麥克風開著' : '打開麥克風';
     $('#kMon').disabled = !m.on; $('#kMon').checked = m.monitor;
     $('#kVol').value = String(this.S.kVol); $('#kEcho').value = String(this.S.kEcho); $('#kRev').value = String(this.S.kRev);
-    $('#kKtv').textContent = this.S.theme === 'ktv' ? '已是 KTV 畫面' : '換成 KTV 畫面';
-    $('#kKtv').disabled = this.S.theme === 'ktv';
+    $('#kStage').setAttribute('aria-pressed', String(this.S.theme === 'stage'));
+    $('#kSpot').setAttribute('aria-pressed', String(this.S.theme === 'spot'));
+    $('#kVoice').checked = !!this.S.voiceViz;
     const b = $('#btnKaraoke');
     b.classList.toggle('on', m.on); b.setAttribute('aria-pressed', String(m.on));
+    if (!m.on) b.style.setProperty('--lvl', '0');
     b.dataset.tip = m.on ? (m.monitor ? '卡拉 OK：麥克風開著，耳機聽得到（K）' : '卡拉 OK：麥克風開著（K）') : '卡拉 OK（K）';
   },
   async toggleMic() {
@@ -652,7 +667,7 @@ const App = {
     if (Math.abs(this.S.offset) < 0.05) this.S.offset = 0;
     this.save(); this.updateDock();
   },
-  setTheme(id) { this.S.theme = id; this.save(); this.r.setTheme(id); this.updateDock(); },
+  setTheme(id) { this.S.theme = id; this.save(); this.r.setTheme(id); this.updateDock(); this.syncKaraokeUI(); },
   setLayout(id) {
     if (this.rec.busy) { toast('錄影中不能換比例'); return false; }
     this.S.layout = id; this.save(); this.resize(); this.updateDock();
@@ -796,17 +811,21 @@ const App = {
     $('#qLoop').onclick = () => { const y = this.sources.youtube; y.setLoop(!y.loop); this.S.ytLoop = y.loop; this.save(); this.renderQueue(); };
     $('#qAdd').onclick = () => { $('#dlgQueue').close(); this.openYoutube(true); };
     $('#btnKaraoke').onclick = () => this.openKaraoke();
+    $('#kClose').onclick = () => this.openKaraoke(false);
+    $('#kPanel').addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); this.openKaraoke(false); } });
     $('#kOn').onclick = async () => { await this.toggleMic(); this.syncKaraokeUI(); };
+    const karaokeStyle = id => this.setTheme(id);
+    $('#kStage').onclick = () => karaokeStyle('stage');
+    $('#kSpot').onclick = () => karaokeStyle('spot');
+    $('#kVoice').addEventListener('change', ev => { this.S.voiceViz = ev.target.checked; this.save(); this.r.setOpts({ voice: this.S.voiceViz }); });
     $('#kMon').addEventListener('change', ev => {
       this.mic.setMonitor(ev.target.checked);
       if (ev.target.checked) toast('請確定戴著耳機。用喇叭的話，聲音會繞回麥克風發出刺耳的回授聲。', 6000);
     });
     const bindMic = (id, key, name) => $(id).addEventListener('input', ev => { this.S[key] = +ev.target.value; this.mic.set(name, this.S[key]); this.save(); });
     bindMic('#kVol', 'kVol', 'vol'); bindMic('#kEcho', 'kEcho', 'echo'); bindMic('#kRev', 'kRev', 'reverb');
-    $('#kKtv').onclick = () => { this.S.theme = 'ktv'; this.r.setTheme('ktv'); this.save(); this.updateDock(); this.syncKaraokeUI(); toast('已換成 KTV 畫面，按 T 可以換回其他風格'); };
     $('#kRec').onclick = async () => {
       if (!this.mic.on) { await this.toggleMic(); if (!this.mic.on) return; }
-      $('#dlgKaraoke').close();
       this.S.recAudio = this.S.source === 'demo' ? 'mic' : 'both';
       this.save();
       this.openRec();
@@ -916,7 +935,7 @@ const App = {
       document.body.classList.remove('idle');
       clearTimeout(idleT);
       idleT = setTimeout(() => {
-        if (!document.querySelector('dialog[open]') && !this.menu && !document.querySelector('.ui :hover') && !document.querySelector('.ui :focus-visible')) document.body.classList.add('idle');
+        if (!document.querySelector('dialog[open]') && !this.menu && $('#kPanel').hidden && !document.querySelector('.ui :hover') && !document.querySelector('.ui :focus-visible')) document.body.classList.add('idle');
       }, 2600);
     };
     ['pointermove', 'pointerdown', 'keydown', 'wheel'].forEach(e => addEventListener(e, wake, { passive: true }));

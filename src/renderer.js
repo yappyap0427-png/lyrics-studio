@@ -22,14 +22,20 @@ const THEMES = {
     inA: [0.3, 0.3], unA: 1, glow: 0, softBehind: 0,
     dim: 0.34, vignette: 0.75, grain: 0.12, grainFps: 24, sat: 1.05, blur: 4, kenBurns: true, credit: true, ink: [255, 255, 255],
   },
-  ktv: {
-    label: 'KTV', desc: '下方兩行輪流，唱過的字變色', mode: 'ktv', font: 'sans', weight: 800,
-    size: [76, 66], gapK: 0.62, rowK: 1.2, align: null, inactiveScale: 1,
-    inA: [1, 1], unA: 1, glow: 0, softBehind: 0,
-    dim: 0.36, vignette: 0.55, grain: 0.04, grainFps: 0, sat: 1.4, blur: 7, kenBurns: false, credit: false, ink: [255, 255, 255],
+  stage: {
+    label: '舞台', desc: '唱歌用：大字靠左，看得到上一句和接下來兩句', mode: 'scroll', compact: true, window: [1, 2], font: 'sans', weight: 800,
+    size: [76, 64], gapK: 0.5, rowK: 1.16, align: 'left', inactiveScale: 0.56,
+    inA: [0.26, 0.34], unA: 0.4, glow: 1.1, softBehind: 0.9,
+    dim: 0.3, vignette: 0.5, grain: 0.03, grainFps: 0, sat: 1.35, blur: 6, kenBurns: false, credit: false, ink: [255, 255, 255],
+  },
+  spot: {
+    label: '聚光', desc: '短影音用：一行大字置中，唱到的字逐字跳出來', mode: 'spot', font: 'sans', weight: 900,
+    size: [88, 80], gapK: 0.5, rowK: 1.16, align: 'center', inactiveScale: 1,
+    inA: [0.34, 0.34], unA: 0.34, glow: 0, softBehind: 0,
+    dim: 0.34, vignette: 0.6, grain: 0.03, grainFps: 0, sat: 1.4, blur: 6, kenBurns: false, credit: false, ink: [255, 255, 255],
   },
 };
-const THEME_ORDER = ['flow', 'serif', 'cinema', 'ktv'];
+const THEME_ORDER = ['flow', 'serif', 'cinema', 'stage', 'spot'];
 const famOf = T => (T.font === 'serif' ? FONT_SERIF : FONT_SANS);
 
 const CJK_CHAR = /[⺀-⿿　-〿぀-ヿ㄀-ㄯ㐀-䶿一-鿿가-힯豈-﫿︰-﹏＀-￯]/;
@@ -65,33 +71,6 @@ function rowFill(r, P) {
   for (let j = 0; j < m.length; j++) if (P < m[j] + 1) return j + Math.max(0, P - m[j]);
   return m.length;
 }
-/* KTV: two rows, lines alternate between them, and each verse starts on the top row after a break.
-   A line shows up when the line before it starts (a verse's first two lines a few seconds early, with count-in dots)
-   and leaves when the line two after it shows up. One item per sung line. */
-function ktvSchedule(E, lead = 3.5) {
-  const out = [];
-  E.forEach((e, i) => {
-    if (e.type !== 'line') return;
-    const prev = out[out.length - 1];
-    const brk = !prev || e.time - prev.fillEnd >= 3.5;
-    out.push({ i, row: brk ? 0 : 1 - prev.row, brk, time: e.time, fillEnd: e.fillEnd, appear: 0, hide: 0, dots: false });
-  });
-  for (let k = 0; k < out.length; k++) {
-    const o = out[k], p = out[k - 1];
-    if (o.brk) {
-      o.appear = Math.max(p ? p.fillEnd + 0.6 : 0, o.time - lead, 0);
-      o.dots = o.time - o.appear >= 1.6;
-    } else o.appear = p.brk ? p.appear : p.time;
-  }
-  for (let k = 0; k < out.length; k++) {
-    const o = out[k], n1 = out[k + 1], n2 = out[k + 2];
-    const same1 = n1 && !n1.brk, same2 = same1 && n2 && !n2.brk;
-    let hide = same2 ? n2.appear : same1 ? Math.max(o.fillEnd + 0.8, n1.time + 0.4) : o.fillEnd + 1.2;
-    for (let j = k + 1; j < out.length; j++) if (out[j].row === o.row) { hide = Math.min(hide, out[j].appear); break; }
-    o.hide = Math.max(hide, o.appear + 0.3);
-  }
-  return out;
-}
 function charTimes(words) {
   const st = [], en = [];
   for (const w of words) {
@@ -108,7 +87,8 @@ class Renderer {
     this.c = canvas;
     this.x = canvas.getContext('2d', { alpha: false });
     this.theme = 'flow';
-    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true };
+    this.opts = { karaoke: true, blur: true, align: 'auto', scale: 1, showInfo: true, credit: true, voice: true };
+    this.voice = { on: false, hist: new Float32Array(64), n: 0 };
     this.track = null;
     this.artImg = null; this.artSmall = null; this.artMid = null; this.artCrop = null; this.artAlpha = 0; this.artTok = 0;
     this.palette = Palette.fromString('Lyrics Studio');
@@ -241,20 +221,14 @@ class Renderer {
     g.font = T.size[land ? 0 : 1] * u * s;
     g.gap = g.font * T.gapK;
     g.rowH = g.font * T.rowK;
-    if (T.mode === 'ktv') {
+    if (T.mode === 'spot') {
       const tall = ar < 0.8;
       g.font = (tall ? T.size[1] * W / 1080 : T.size[0] * u) * s;
-      g.padL = W * (tall ? 0.07 : 0.1); g.padR = W * (tall ? 0.14 : 0.1); // tall: keep clear of the buttons down the right side of Reels / TikTok
-      g.maxW = W - g.padL - g.padR;
-      g.rowGap = g.font * 1.42;
-      g.rowY = tall ? [H * 0.58, H * 0.58 + g.rowGap] : [H * 0.82 - g.rowGap, H * 0.82];
-      g.header = true;
-      g.artSize = (tall ? 190 : 150) * u;
-      g.artX = tall ? W * 0.075 : W * 0.06; g.artY = tall ? Math.max(150 * u, H * 0.13) : H * 0.08;
-      g.infoX = g.artX + g.artSize + 34 * u; g.infoW = tall ? W - g.infoX - W * 0.075 : W * 0.36;
-      if (!tall) { g.progX = g.infoX; g.progW = g.infoW; g.progY = g.artY + g.artSize * 0.44 + 82 * u; }
-      g.lx = g.padL; g.lw = W - g.padL - g.padR; g.cx = W / 2; g.align = 'left';
-      g.top = H * 0.3; g.bottom = tall ? H * 0.8 : H * 0.95; g.anchor = g.rowY[0];
+      g.maxW = W * (tall ? 0.8 : 0.76);
+      g.cx = W / 2; g.lineY = tall ? H * 0.47 : H * 0.5;
+      this.compactHeader(g, tall);
+      g.lx = (W - g.maxW) / 2; g.lw = g.maxW; g.align = 'center';
+      g.top = H * 0.3; g.bottom = H * (tall ? 0.78 : 0.95); g.anchor = g.lineY;
       return g;
     }
     if (T.mode === 'subtitle') {
@@ -265,7 +239,11 @@ class Renderer {
       return g;
     }
     const info = this.opts.showInfo;
-    if (land) {
+    if (T.compact && land) { // stage: small title in the corner, the lyrics get the whole width
+      this.compactHeader(g, false);
+      g.lx = W * 0.075; g.lw = W * 0.8;
+      g.top = H * 0.2; g.bottom = H * 0.94; g.anchor = H * 0.42;
+    } else if (land) {
       g.artSize = Math.min(W * 0.27, H * 0.46);
       g.artX = W * 0.085; g.artY = H * 0.5 - g.artSize * 0.62;
       g.infoX = g.artX; g.infoY = g.artY + g.artSize + 40 * u; g.infoW = g.artSize;
@@ -286,6 +264,15 @@ class Renderer {
     g.align = this.opts.align === 'auto' ? (T.align || (land ? 'left' : 'center')) : this.opts.align;
     g.cx = g.lx + g.lw / 2;
     return g;
+  }
+  /* cover and title in the top-left corner, progress under the title (tall: under the cover, clear of the top band) */
+  compactHeader(g, tall) {
+    const { W, H } = this, u = g.u;
+    g.header = true;
+    g.artSize = (tall ? 150 : 104) * u;
+    g.artX = tall ? W * 0.075 : W * 0.05; g.artY = tall ? Math.max(150 * u, H * 0.13) : H * 0.07;
+    g.infoX = g.artX + g.artSize + 28 * u; g.infoW = tall ? W - g.infoX - W * 0.075 : W * 0.32;
+    if (!tall) { g.progX = g.infoX; g.progW = g.infoW; g.progY = g.artY + g.artSize * 0.44 + 70 * u; }
   }
   mainFont(px) { const T = this.T; return `${T.weight} ${px.toFixed(1)}px ${famOf(T)}`; }
   subFont(px) { return `500 ${px.toFixed(1)}px ${famOf(this.T)}`; }
@@ -361,23 +348,23 @@ class Renderer {
         x.font = this.mainFont(g.font * 0.7);
         this.plainRows = (this.lyr.plain || []).map(t => (t.trim() ? this.wrap(t.trim(), g.lw) : []));
       }
-    } else if (this.T.mode === 'ktv') {
+    } else if (this.T.mode === 'spot') {
       for (const e of E) {
         e.C = null;
         if (e.type !== 'line') continue;
         let px = g.font;
         x.font = this.mainFont(px);
-        const w = this.measure(e.text);
-        if (w > g.maxW) { px = Math.max(g.font * 0.62, px * g.maxW / w); x.font = this.mainFont(px); } // shrink a long line before wrapping it
-        const rows = this.wrap(e.text, g.maxW);
+        let rows = this.wrap(e.text, g.maxW);
+        while (rows.length > 2 && px > g.font * 0.6) { px *= 0.9; x.font = this.mainFont(px); rows = this.wrap(e.text, g.maxW); } // at most two rows
         const tc = Array.from(e.text);
         mapRows(rows, tc);
-        const subPx = px * 0.46;
+        const subPx = px * 0.4;
         let subRows = [];
         if (e.sub) { x.font = this.subFont(subPx); subRows = this.wrap(e.sub.replace(/\n/g, ' / '), g.maxW); }
-        e.K = { px, rows, subRows, subPx, textLen: tc.length, charT: e.words ? charTimes(e.words) : null };
+        const nextPx = Math.min(px, g.font) * 0.4;
+        x.font = this.mainFont(nextPx);
+        e.P = { px, rows, subRows, subPx, nextPx, nextText: ellipsize(x, e.text, g.maxW), textLen: tc.length, charT: e.words ? charTimes(e.words) : null };
       }
-      this.ktvPlan = ktvSchedule(E);
     } else {
       for (const e of E) e.C = null;
     }
@@ -395,13 +382,14 @@ class Renderer {
     x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetX = 0; x.shadowOffsetY = 0;
     this.drawBackground(dt);
     if (this.T.mode === 'subtitle') this.drawCinema(songT, lyricT, dt);
-    else if (this.T.mode === 'ktv') {
+    else if (this.T.mode === 'spot') {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
-      this.drawKtv(songT, lyricT, dt);
+      this.drawSpot(lyricT, dt);
     } else {
       if (this.opts.showInfo) this.drawInfo(songT, dt, playing);
       this.drawLyrics(lyricT, dt);
     }
+    if (this.voice.on && this.opts.voice) this.drawVoice(dt);
     this.monitor(dt);
   }
   monitor(dt) {
@@ -607,6 +595,10 @@ class Renderer {
       L.y = L.y == null || snap ? target : approach(L.y, target, dt, k0 / (1 + d * 0.11)); // farther lines trail a little
       const act = i === ai ? 1 : 0;
       L.lv = snap ? act : approach(L.lv || 0, act, dt, act ? 7 : 4.5);
+      if (T.window) { // stage: everything outside a few lines around the current one fades away
+        const inWin = i >= focus - T.window[0] && i <= focus + T.window[1] ? 1 : 0;
+        L.wa = L.wa == null || snap ? inWin : approach(L.wa, inWin, dt, 5);
+      }
       const ts = act ? 1 : T.inactiveScale;
       L.s = L.s == null || snap ? ts : approach(L.s, ts, dt, 6);
     }
@@ -616,7 +608,7 @@ class Renderer {
       const h = e.type === 'gap' ? L.hh : L.h;
       if (y > g.bottom + g.rowH || y + h < g.top - g.rowH) continue;
       const mid = y + h * 0.5;
-      const fade = clamp((mid - g.top) / fadeLen, 0, 1) * clamp((g.bottom - mid) / fadeLen, 0, 1);
+      const fade = clamp((mid - g.top) / fadeLen, 0, 1) * clamp((g.bottom - mid) / fadeLen, 0, 1) * (T.window ? L.wa : 1);
       if (fade <= 0.005) continue;
       if (e.type === 'gap') { if (L.hh > 0.5) this.drawDots(e, L, t, fade); continue; }
       const d = Math.abs(i - focus);
@@ -788,97 +780,129 @@ class Renderer {
     x.restore();
   }
 
-  /* ---------- KTV: two rows at the bottom, outlined text, sung characters change colour ---------- */
-  ktvColor() {
-    const a = this.palette.accent;
-    if (this._kc && this._kcFor === a) return this._kc;
-    const [h, sat, l] = rgbToHsl(a[0], a[1], a[2]);
-    this._kcFor = a;
-    this._kc = rgba(hslToRgb(h, Math.max(sat, 0.78), clamp(l, 0.5, 0.6)), 1); // vivid enough to read against white
-    return this._kc;
+  /* ---------- 聚光: one big line in the middle; each character lifts and glows as it is sung ---------- */
+  spotState(t) {
+    const E = this.lyr.entries;
+    let ci = -1;
+    for (let i = 0; i < E.length; i++) { if (E[i].type !== 'line') continue; if (E[i].time <= t) ci = i; else break; }
+    let ni = -1;
+    for (let i = ci + 1; i < E.length; i++) if (E[i].type === 'line') { ni = i; break; }
+    const cur = ci >= 0 ? E[ci] : null, nxt = ni >= 0 ? E[ni] : null;
+    // a pause: the last line is done and the next one is a while away → count-in dots instead of a stale line
+    const idle = !cur || (t > cur.fillEnd + 0.8 && (!nxt || nxt.time - t > 0.25) && (!nxt || nxt.time - cur.fillEnd >= 3));
+    return { main: idle ? -1 : ci, next: ni, nxt, wait: idle && nxt ? nxt.time - t : Infinity, before: ci < 0 };
   }
-  ktvText(r, rx, y, px, nfill) {
-    const x = this.x;
-    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(8,10,24,0.92)';
-    x.strokeText(r.text, rx, y);
-    x.fillStyle = '#fff'; x.fillText(r.text, rx, y);
-    if (nfill <= 0) return;
-    const edge = rx + this.charX(r, nfill);
+  drawSpot(t, dt) {
+    const x = this.x, g = this.g, E = this.lyr.entries;
+    if (this.lyr.status !== 'synced' || !E.length) { this.curLine = ''; this.drawLyricState(t, dt); return; }
+    const st = this.spotState(t);
+    // the song's name opens (and closes) the piece; long instrumental breaks breathe until the count-in
+    const key = st.main >= 0 ? 'l' + st.main : (st.before && st.wait > 3.2) || !st.nxt ? 'title' : 'wait' + st.next;
+    if (key !== this.spotKey) { // cross-fade between what was shown and what is shown now
+      if (this.spotKey) this.spotOld = { key: this.spotKey, main: this.spotMain, k: 1 };
+      this.spotKey = key; this.spotMain = st.main; this.spotIn = 0;
+    }
+    this.spotIn = Math.min(1, this.spotIn + dt / 0.3);
+    if (this.spotOld) { this.spotOld.k -= dt / 0.22; if (this.spotOld.k <= 0) this.spotOld = null; }
     x.save();
-    x.beginPath(); x.rect(rx - px, y - px * 1.2, edge - rx + px, px * 2.4); x.clip();
-    x.lineWidth = px * 0.15; x.strokeStyle = 'rgba(255,255,255,0.96)'; x.strokeText(r.text, rx, y);
-    x.fillStyle = this.ktvColor(); x.fillText(r.text, rx, y);
+    x.textBaseline = 'middle'; x.textAlign = 'left';
+    if (this.spotOld && this.spotOld.main >= 0) this.drawSpotLine(E[this.spotOld.main], t, this.spotOld.k, -(1 - this.spotOld.k) * g.font * 0.45, false);
+    const ein = easeOut(this.spotIn), rise = (1 - ein) * g.font * 0.35;
+    let below = g.lineY + g.font * 0.75;
+    if (st.main >= 0) {
+      const e = E[st.main];
+      below = this.drawSpotLine(e, t, ein, rise, true);
+      this.curLine = e.text;
+    } else {
+      this.curLine = '';
+      if (key === 'title' && this.track) {
+        x.globalAlpha = ein;
+        x.textAlign = 'center';
+        x.font = this.mainFont(g.font * 0.8); x.fillStyle = '#fff';
+        x.fillText(ellipsize(x, this.track.title, g.maxW), g.cx, g.lineY - g.font * 0.2 + rise);
+        x.font = this.subFont(g.font * 0.34); x.fillStyle = 'rgba(255,255,255,0.7)';
+        x.fillText(ellipsize(x, this.track.artist || '', g.maxW), g.cx, g.lineY + g.font * 0.55 + rise);
+        x.textAlign = 'left';
+        below = g.lineY + g.font * 1.1;
+      } else if (st.nxt) this.drawCountIn(g.cx, g.lineY, g.font, st.wait, ein);
+    }
+    if (st.nxt && st.next !== st.main) { // what comes next, small
+      const P = st.nxt.P;
+      x.globalAlpha = 0.45 * (st.main >= 0 ? ein : 1);
+      x.font = this.mainFont(P.nextPx); x.fillStyle = '#fff'; x.textAlign = 'center';
+      x.fillText(P.nextText, g.cx, below + P.nextPx * 0.9);
+    }
     x.restore();
   }
-  drawKtv(songT, t, dt) {
-    const x = this.x, g = this.g, W = this.W, H = this.H, E = this.lyr.entries, st = this.lyr.status;
-    const top = g.rowY[0] - g.font * 1.9;
-    const shade = x.createLinearGradient(0, top, 0, H); // a soft shade keeps the rows readable on any cover
-    shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(0.5, 'rgba(0,0,0,0.26)'); shade.addColorStop(1, 'rgba(0,0,0,0.42)');
-    x.fillStyle = shade; x.fillRect(0, top, W, H - top);
+  /* returns the y just below what it drew */
+  drawSpotLine(e, t, alpha, dy, live) {
+    const x = this.x, g = this.g, P = e.P;
+    if (!P) return g.lineY;
+    const px = P.px, rh = px * 1.14, n = P.rows.length;
+    const subH = P.subRows.length ? px * 0.2 + P.subRows.length * P.subPx * 1.3 : 0;
+    let y = g.lineY - ((n - 1) * rh + subH) / 2 + dy;
+    const sung = !this.opts.karaoke ? (t >= e.time ? P.textLen : 0) : this.progressChars(e, t, P);
+    x.font = this.mainFont(px);
+    for (const r of P.rows) {
+      const w = this.charX(r, r.chars.length), x0 = g.cx - w / 2;
+      for (let k = 0; k < r.chars.length; k++) {
+        const ch = r.chars[k];
+        if (ch === ' ') continue;
+        const c0 = this.charX(r, k), cw = this.charX(r, k + 1) - c0;
+        const p = live ? sung - r.map[k] : 1;
+        const lit = clamp(p, 0, 1);
+        const pop = live && this.opts.karaoke ? Math.max(0, 1 - Math.abs(p - 0.5) / 0.85) : 0;
+        const sc = 1 + 0.15 * pop, cx = x0 + c0 + cw / 2, cy = y - px * 0.08 * pop;
+        x.globalAlpha = alpha * lerp(0.34, 1, lit);
+        if (pop > 0.08 && !this.perfLow) { x.shadowColor = rgba(this.palette.accent, 0.9 * pop); x.shadowBlur = px * 0.35 * pop; }
+        x.fillStyle = '#fff';
+        if (sc !== 1) { x.save(); x.translate(cx, cy); x.scale(sc, sc); x.fillText(ch, -cw / 2, 0); x.restore(); }
+        else x.fillText(ch, cx - cw / 2, cy);
+        if (pop > 0.08) { x.shadowBlur = 0; x.shadowColor = 'transparent'; }
+      }
+      y += rh;
+    }
+    if (subH) {
+      x.font = this.subFont(P.subPx); x.fillStyle = '#fff'; x.textAlign = 'center';
+      x.globalAlpha = alpha * 0.72;
+      y += px * 0.2 - rh / 2 + P.subPx * 0.65;
+      for (const r of P.subRows) { x.fillText(r.text, g.cx, y); y += P.subPx * 1.3; }
+      x.textAlign = 'left';
+      return y - P.subPx * 0.65 + rh * 0.2;
+    }
+    return y - rh / 2 + px * 0.2;
+  }
+  /* three dots that light up one by one before singing starts again */
+  drawCountIn(cx, cy, font, wait, alpha) {
+    const x = this.x, n = 3, r = font * 0.1, sp = font * 0.36, span = 3;
+    const p = clamp(1 - wait / span, 0, 1);
+    for (let k = 0; k < n; k++) {
+      const kp = clamp(p * n - k, 0, 1);
+      const br = 1 + 0.18 * Math.sin(this.anim * 2.6 - k * 0.9);
+      x.globalAlpha = alpha * (0.28 + 0.72 * kp);
+      x.beginPath(); x.arc(cx + (k - 1) * sp, cy, r * br * (0.85 + 0.25 * kp), 0, Math.PI * 2);
+      x.fillStyle = '#fff'; x.fill();
+    }
+  }
+  /* ---------- your voice, from the karaoke microphone ---------- */
+  voiceLevel(level) {
+    const v = this.voice;
+    v.hist[v.n++ % v.hist.length] = level;
+  }
+  drawVoice(dt) {
+    const x = this.x, g = this.g, u = g.u, W = this.W, H = this.H, v = this.voice;
+    const tall = W / H < 0.8, bars = 24, bw = 5 * u, gap = 4 * u, maxH = 34 * u;
+    const x0 = tall ? W * 0.075 : W * 0.05, y0 = tall ? H * 0.73 : H - 64 * u;
     x.save();
-    x.textBaseline = 'middle'; x.textAlign = 'left'; x.lineJoin = 'round'; x.miterLimit = 2;
-    const center = (text, px, y, weight = 800) => {
-      x.font = `${weight} ${px.toFixed(1)}px ${FONT_SANS}`;
-      const s = ellipsize(x, text, g.lw), w = this.measure(s);
-      this.ktvText({ text: s, chars: Array.from(s) }, W / 2 - w / 2, y, px, 0);
-    };
-    if (st !== 'synced' || !E.length) {
-      this.curLine = '';
-      const msg = st === 'plain' ? '這首只有未同步的歌詞，換成流光或明體風格來看' : this.stateText()[0];
-      x.globalAlpha = st === 'loading' ? 0.55 + 0.35 * Math.sin(this.anim * 3) : 0.9;
-      center(msg, g.font * 0.6, (g.rowY[0] + g.rowY[1]) / 2, 700);
-      x.restore();
-      return;
+    x.globalAlpha = 0.9;
+    for (let k = 0; k < bars; k++) {
+      const lv = v.hist[(v.n - bars + k + v.hist.length * 4) % v.hist.length] || 0;
+      const h = Math.max(3 * u, Math.min(1, Math.sqrt(lv) * 2.2) * maxH);
+      x.fillStyle = rgba(this.palette.accent, 0.55 + 0.45 * (k / bars));
+      roundRect(x, x0 + k * (bw + gap), y0 - h / 2, bw, h, bw / 2); x.fill();
     }
-    const plan = this.ktvPlan || [];
-    const first = plan[0];
-    if (first && this.track && t < first.appear && first.appear >= 2.5) { // intro: song title, like a KTV title card
-      x.globalAlpha = clamp((t - 0.3) / 0.9, 0, 1) * clamp((first.appear - 0.2 - t) / 0.6, 0, 1);
-      if (x.globalAlpha > 0.01) {
-        center(this.track.title, g.font * 1.05, g.rowY[0]);
-        if (this.track.artist) center(this.track.artist, g.font * 0.5, g.rowY[1], 600);
-      }
-    }
-    let cur = '';
-    for (const o of plan) {
-      if (t < o.appear || t > o.hide) continue;
-      const e = E[o.i], K = e.K;
-      if (!K) continue;
-      if (t >= e.time && t < e.end) cur = e.text;
-      x.globalAlpha = clamp((t - o.appear) / 0.12, 0, 1) * clamp((o.hide - t) / 0.12, 0, 1);
-      const sung = this.opts.karaoke ? this.progressChars(e, t, K) : t >= e.time ? K.textLen : 0;
-      const rh = K.px * 1.16, n = K.rows.length;
-      const subH = K.subRows.length ? K.px * 0.18 + K.subRows.length * K.subPx * 1.3 : 0;
-      let y = o.row === 0 ? g.rowY[0] - (n - 1) * rh - subH : g.rowY[1];
-      x.font = this.mainFont(K.px);
-      const firstX = o.row === 0 ? g.padL : W - g.padR - K.rows[0].w;
-      if (o.dots && t < o.time) { // count-in: four dots, one goes out every 0.8 s
-        const nd = Math.min(4, Math.ceil((o.time - t) / 0.8)), r = K.px * 0.11, sp = K.px * 0.38;
-        for (let k = 0; k < nd; k++) {
-          x.beginPath(); x.arc(firstX + r + k * sp, y - K.px * 0.86, r, 0, Math.PI * 2);
-          x.fillStyle = this.ktvColor(); x.fill();
-          x.lineWidth = r * 0.45; x.strokeStyle = 'rgba(255,255,255,0.9)'; x.stroke();
-        }
-      }
-      for (const r of K.rows) {
-        const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
-        this.ktvText(r, rx, y, K.px, rowFill(r, sung));
-        y += rh;
-      }
-      if (subH) {
-        x.font = this.subFont(K.subPx);
-        y += K.px * 0.18 - rh / 2 + K.subPx * 0.65;
-        for (const r of K.subRows) {
-          const rx = o.row === 0 ? g.padL : W - g.padR - r.w;
-          x.lineWidth = K.subPx * 0.18; x.strokeStyle = 'rgba(8,10,24,0.85)'; x.strokeText(r.text, rx, y);
-          x.fillStyle = 'rgba(255,255,255,0.9)'; x.fillText(r.text, rx, y);
-          y += K.subPx * 1.3;
-        }
-        x.font = this.mainFont(K.px);
-      }
-    }
-    this.curLine = cur;
+    x.font = this.subFont(18 * u); x.fillStyle = 'rgba(255,255,255,0.78)'; x.textBaseline = 'middle';
+    x.fillText('你的聲音', x0 + bars * (bw + gap) + 12 * u, y0);
     x.restore();
   }
 

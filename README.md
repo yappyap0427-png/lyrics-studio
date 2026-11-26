@@ -1,8 +1,8 @@
 # Lyrics Studio 歌詞播放器
 
-連接 Spotify，或直接播放 YouTube／YouTube Music 的歌和歌單，自動抓同步歌詞，用「流光」「明體」「電影」「KTV」四種風格顯示。可以開麥克風唱卡拉 OK，也能把畫面直接錄成影片，或只錄一段副歌做成短影音。
+連接 Spotify，或直接播放 YouTube／YouTube Music 的歌和歌單，自動抓同步歌詞，用「流光」「明體」「電影」「舞台」「聚光」五種風格顯示。可以開麥克風唱卡拉 OK，也能把畫面直接錄成影片，或只錄一段副歌做成短影音。
 
-A synced-lyrics player for Spotify and YouTube (songs and playlists) with four visual styles, a karaoke mic with echo, and built-in video recording, including one-file-per-song and chorus clips. Single HTML file, no install.
+A synced-lyrics player for Spotify and YouTube (songs and playlists) with five visual styles (two made for singing), a karaoke mic with echo, and built-in video recording, including one-file-per-song and chorus clips. Single HTML file, no install.
 
 **線上版 / Live：** <https://yappyap0427-png.github.io/lyrics-studio/>
 
@@ -63,10 +63,14 @@ Spotify 從 2026 年 2 月起規定：開發模式的 App 擁有者必須有 Pre
 
 ## 卡拉 OK
 
-按 `K` 或下方的麥克風按鈕。
+按 `K` 或下方的麥克風按鈕，會在按鈕上方打開一個小面板，不會擋住整個畫面，邊唱邊調都可以。再按一次 `K` 或 `Esc` 關掉。
 
-- **KTV 畫面**：風格選「KTV」。歌詞在下方兩行一左一右輪流，唱過的字會變色，每段開始前有倒數圓點。
-- **麥克風**：按「打開麥克風」。要聽到自己的聲音，先戴上**有線耳機**再勾「從耳機聽自己的聲音」；藍牙耳機延遲太大，喇叭會產生回授聲（偵測到時會自動關掉）。可以調人聲大小、回音、殘響。
+- **唱歌畫面**：面板裡有兩種唱歌用的風格。
+  - **舞台**：大字靠左，看得到上一句和接下來兩句，適合自己唱或橫式影片。
+  - **聚光**：一次只有一句大字在正中間，唱到的字會逐字跳出來，下面小字是下一句。適合 9:16 短影音。
+  - 兩種都會在間奏時顯示呼吸的圓點，快開始唱時圓點一個一個亮起來當倒數。
+- **麥克風**：按「打開麥克風」。打開後下方的麥克風按鈕會跟著你的音量跳動。要聽到自己的聲音，先戴上**有線耳機**再勾「從耳機聽自己的聲音」；藍牙耳機延遲太大，喇叭會產生回授聲（偵測到時會自動關掉）。可以調人聲大小、回音、殘響。
+- **聲音波形**：麥克風打開時，畫面角落會顯示你的聲音波形，錄影也會錄進去。不想要就在面板取消勾選「聲音波形」。
 - **伴奏**：在 YouTube 貼伴奏或 KTV 版的連結。YouTube 和 Spotify 的聲音程式碰不到，所以沒辦法幫原曲消人聲。
 - **錄下自己唱的**：按「錄下我唱的」，錄影會同時錄到歌和加了回音的人聲。
 
@@ -95,7 +99,7 @@ Spotify 從 2026 年 2 月起規定：開發模式的 App 擁有者必須有 Pre
 | ← → | 倒退或快轉 5 秒（YouTube、示範） |
 | `[` `]` | 歌詞提早或延後 0.1 秒，按住 Shift 一次 0.5 秒 |
 | `L` | 搜尋歌詞 |
-| `T` | 切換風格：流光、明體、電影、KTV |
+| `T` | 切換風格：流光、明體、電影、舞台、聚光 |
 | `V` | 切換比例：填滿、16:9、9:16、1:1 |
 | `R` | 開始或停止錄影 |
 | `P` | 錄影中暫停或繼續 |
@@ -103,7 +107,7 @@ Spotify 從 2026 年 2 月起規定：開發模式的 App 擁有者必須有 Pre
 | `N` | 下一首（YouTube 清單） |
 | `Shift`+`P` | 上一首（YouTube 清單） |
 | `Q` | 打開播放清單 |
-| `K` | 卡拉 OK：麥克風、回音 |
+| `K` | 打開或關掉卡拉 OK 面板：麥克風、回音、唱歌畫面 |
 | `F` | 全螢幕 |
 | `H` | 隱藏或顯示介面 |
 
